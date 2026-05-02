@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import FeatherIcon from "@/components/FeatherIcon";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
@@ -80,7 +80,7 @@ export default function Onboarding() {
       >
         <View style={styles.logoArea}>
           <View style={[styles.logoCircle, { backgroundColor: "rgba(255,107,53,0.15)" }]}>
-            <Feather name="navigation" size={40} color="#FF6B35" />
+            <FeatherIcon name="navigation" size={40} color="#FF6B35" />
           </View>
           <Text style={styles.appName}>يونيرايد</Text>
           <Text style={styles.appNameEn}>UniRide Iraq</Text>
@@ -96,7 +96,7 @@ export default function Onboarding() {
           ].map((f) => (
             <View key={f.text} style={styles.featureItem}>
               <View style={[styles.featureIcon, { backgroundColor: "rgba(255,255,255,0.1)" }]}>
-                <Feather name={f.icon as any} size={20} color="#FF9E7A" />
+                <FeatherIcon name={f.icon as any} size={20} color="#FF9E7A" />
               </View>
               <Text style={styles.featureText}>{f.text}</Text>
             </View>
@@ -110,7 +110,7 @@ export default function Onboarding() {
             activeOpacity={0.85}
           >
             <Text style={styles.startBtnText}>ابدأ الآن</Text>
-            <Feather name="arrow-left" size={18} color="#1A3C6E" />
+            <FeatherIcon name="arrow-left" size={18} color="#1A3C6E" />
           </TouchableOpacity>
           <Text style={styles.disclaimer}>
             بالمتابعة، أنت توافق على شروط الاستخدام وسياسة الخصوصية
@@ -127,7 +127,7 @@ export default function Onboarding() {
         style={[styles.roleContainer, { paddingTop: insets.top + 20 }]}
       >
         <TouchableOpacity style={styles.backBtn} onPress={() => setScreen("welcome")}>
-          <Feather name="arrow-right" size={22} color="#fff" />
+          <FeatherIcon name="arrow-right" size={22} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.roleTitle}>من أنت؟</Text>
         <Text style={styles.roleSubtitle}>اختر نوع حسابك للمتابعة</Text>
@@ -139,12 +139,12 @@ export default function Onboarding() {
             activeOpacity={0.8}
           >
             <View style={[styles.roleIconBig, { backgroundColor: "rgba(255,107,53,0.2)" }]}>
-              <Feather name="book-open" size={36} color="#FF6B35" />
+              <FeatherIcon name="book-open" size={36} color="#FF6B35" />
             </View>
             <Text style={styles.roleCardTitle}>طالب جامعي</Text>
             <Text style={styles.roleCardDesc}>اشترك مع سائق وتابع رحلتك اليومية إلى الجامعة بأمان</Text>
             <View style={[styles.roleArrow, { backgroundColor: "#FF6B35" }]}>
-              <Feather name="arrow-left" size={16} color="#fff" />
+              <FeatherIcon name="arrow-left" size={16} color="#fff" />
             </View>
           </TouchableOpacity>
 
@@ -154,12 +154,12 @@ export default function Onboarding() {
             activeOpacity={0.8}
           >
             <View style={[styles.roleIconBig, { backgroundColor: "rgba(91,141,239,0.2)" }]}>
-              <Feather name="truck" size={36} color="#5B8DEF" />
+              <FeatherIcon name="truck" size={36} color="#5B8DEF" />
             </View>
             <Text style={styles.roleCardTitle}>سائق</Text>
             <Text style={styles.roleCardDesc}>قدم خدمات النقل للطلاب واكسب دخلاً ثابتاً شهرياً</Text>
             <View style={[styles.roleArrow, { backgroundColor: "#5B8DEF" }]}>
-              <Feather name="arrow-left" size={16} color="#fff" />
+              <FeatherIcon name="arrow-left" size={16} color="#fff" />
             </View>
           </TouchableOpacity>
         </View>
@@ -177,11 +177,11 @@ export default function Onboarding() {
         style={[styles.authHeader, { paddingTop: insets.top + 16 }]}
       >
         <TouchableOpacity style={styles.backBtn} onPress={() => setScreen("role")}>
-          <Feather name="arrow-right" size={22} color="#fff" />
+          <FeatherIcon name="arrow-right" size={22} color="#fff" />
         </TouchableOpacity>
         <View style={styles.authHeaderContent}>
           <View style={[styles.roleTag, { backgroundColor: role === "student" ? "#FF6B35" : "#5B8DEF" }]}>
-            <Feather name={role === "student" ? "book-open" : "truck"} size={14} color="#fff" />
+            <FeatherIcon name={role === "student" ? "book-open" : "truck"} size={14} color="#fff" />
             <Text style={styles.roleTagText}>{role === "student" ? "طالب" : "سائق"}</Text>
           </View>
           <Text style={styles.authTitle}>
@@ -295,7 +295,7 @@ export default function Onboarding() {
               <Text style={styles.authBtnText}>
                 {authMode === "login" ? "دخول" : "إنشاء الحساب"}
               </Text>
-              <Feather name="arrow-left" size={18} color="#fff" />
+              <FeatherIcon name="arrow-left" size={18} color="#fff" />
             </>
           )}
         </TouchableOpacity>

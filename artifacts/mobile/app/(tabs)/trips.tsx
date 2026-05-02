@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import FeatherIcon from "@/components/FeatherIcon";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useState } from "react";
 import {
@@ -51,7 +51,7 @@ function TripHistoryItem({ trip, role }: { trip: Trip; role: "student" | "driver
     >
       <View style={styles.tripItemTop}>
         <View style={[styles.tripIcon, { backgroundColor: statusColor + "20" }]}>
-          <Feather name={trip.status === "completed" ? "check-circle" : trip.status === "cancelled" ? "x-circle" : "truck"} size={18} color={statusColor} />
+          <FeatherIcon name={trip.status === "completed" ? "check-circle" : trip.status === "cancelled" ? "x-circle" : "truck"} size={18} color={statusColor} />
         </View>
         <View style={styles.tripMain}>
           <Text style={[styles.tripRoute, { color: colors.foreground }]} numberOfLines={1}>
@@ -73,27 +73,27 @@ function TripHistoryItem({ trip, role }: { trip: Trip; role: "student" | "driver
         <View style={[styles.tripDetails, { borderColor: colors.border }]}>
           {role === "student" && trip.driverName && (
             <View style={styles.detailRow}>
-              <Feather name="user" size={13} color={colors.mutedForeground} />
+              <FeatherIcon name="user" size={13} color={colors.mutedForeground} />
               <Text style={[styles.detailText, { color: colors.foreground }]}>{trip.driverName}</Text>
             </View>
           )}
           {role === "driver" && trip.studentName && (
             <View style={styles.detailRow}>
-              <Feather name="user" size={13} color={colors.mutedForeground} />
+              <FeatherIcon name="user" size={13} color={colors.mutedForeground} />
               <Text style={[styles.detailText, { color: colors.foreground }]}>{trip.studentName}</Text>
             </View>
           )}
           <View style={styles.detailRow}>
-            <Feather name="map-pin" size={13} color={colors.success} />
+            <FeatherIcon name="map-pin" size={13} color={colors.success} />
             <Text style={[styles.detailText, { color: colors.foreground }]}>{trip.origin.address}</Text>
           </View>
           <View style={styles.detailRow}>
-            <Feather name="flag" size={13} color={colors.accent} />
+            <FeatherIcon name="flag" size={13} color={colors.accent} />
             <Text style={[styles.detailText, { color: colors.foreground }]}>{trip.destination.address}</Text>
           </View>
           {trip.driverShare !== undefined && (
             <View style={styles.detailRow}>
-              <Feather name="dollar-sign" size={13} color={colors.primary} />
+              <FeatherIcon name="dollar-sign" size={13} color={colors.primary} />
               <Text style={[styles.detailText, { color: colors.foreground }]}>
                 {role === "driver"
                   ? `حصتك: ${(trip.driverShare / 1000).toFixed(0)}k د.ع`
@@ -171,7 +171,7 @@ export default function TripsScreen() {
           </Text>
           {tripHistory.length === 0 ? (
             <View style={[styles.emptyState, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Feather name="map" size={36} color={colors.mutedForeground} />
+              <FeatherIcon name="map" size={36} color={colors.mutedForeground} />
               <Text style={[styles.emptyTitle, { color: colors.foreground }]}>لا توجد رحلات بعد</Text>
               <Text style={[styles.emptyDesc, { color: colors.mutedForeground }]}>
                 {role === "student" ? "احجز رحلتك الأولى من الرئيسية" : "فعّل التوفر لاستقبال الطلبات"}

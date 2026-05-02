@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import FeatherIcon from "@/components/FeatherIcon";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useState } from "react";
@@ -153,11 +153,11 @@ export default function HomeScreen() {
               </View>
               <Text style={styles.requestStudent}>{pendingRequest.studentName}</Text>
               <View style={styles.requestRoute}>
-                <Feather name="map-pin" size={14} color="rgba(255,255,255,0.7)" />
+                <FeatherIcon name="map-pin" size={14} color="rgba(255,255,255,0.7)" />
                 <Text style={styles.requestAddress} numberOfLines={1}>{pendingRequest.origin.address}</Text>
               </View>
               <View style={styles.requestRoute}>
-                <Feather name="flag" size={14} color="#FF9E7A" />
+                <FeatherIcon name="flag" size={14} color="#FF9E7A" />
                 <Text style={styles.requestAddress} numberOfLines={1}>{pendingRequest.destination.address}</Text>
               </View>
               <Text style={styles.requestFare}>{(pendingRequest.fare / 1000).toFixed(0)}k دينار</Text>
@@ -172,7 +172,7 @@ export default function HomeScreen() {
                   style={[styles.acceptBtn, { backgroundColor: colors.accent }]}
                   onPress={() => acceptTrip(pendingRequest.id)}
                 >
-                  <Feather name="check" size={16} color="#fff" />
+                  <FeatherIcon name="check" size={16} color="#fff" />
                   <Text style={styles.acceptBtnText}>قبول</Text>
                 </TouchableOpacity>
               </View>
@@ -181,7 +181,7 @@ export default function HomeScreen() {
 
           {!activeTrip && !pendingRequest && (
             <View style={[styles.emptyState, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Feather name={isDriverOnline ? "clock" : "power"} size={40} color={isDriverOnline ? colors.warning : colors.mutedForeground} />
+              <FeatherIcon name={isDriverOnline ? "clock" : "power"} size={40} color={isDriverOnline ? colors.warning : colors.mutedForeground} />
               <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
                 {isDriverOnline ? "بانتظار طلبات الرحلة..." : "أنت غير متاح حالياً"}
               </Text>
@@ -203,21 +203,21 @@ export default function HomeScreen() {
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>معلومات المركبة</Text>
             <View style={[styles.vehicleCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.vehicleRow}>
-                <Feather name="truck" size={16} color={colors.primary} />
+                <FeatherIcon name="truck" size={16} color={colors.primary} />
                 <Text style={[styles.vehicleText, { color: colors.foreground }]}>
                   {user.vehicleType ?? "—"}
                 </Text>
               </View>
               <View style={[styles.separator, { backgroundColor: colors.border }]} />
               <View style={styles.vehicleRow}>
-                <Feather name="hash" size={16} color={colors.mutedForeground} />
+                <FeatherIcon name="hash" size={16} color={colors.mutedForeground} />
                 <Text style={[styles.vehicleText, { color: colors.foreground }]}>
                   {user.vehiclePlate ?? "—"}
                 </Text>
               </View>
               <View style={[styles.separator, { backgroundColor: colors.border }]} />
               <View style={styles.vehicleRow}>
-                <Feather name="star" size={16} color={colors.warning} />
+                <FeatherIcon name="star" size={16} color={colors.warning} />
                 <Text style={[styles.vehicleText, { color: colors.foreground }]}>
                   {user.rating.toFixed(1)} / 5.0
                 </Text>
@@ -242,7 +242,7 @@ export default function HomeScreen() {
             <Text style={styles.universityLabel}>{user?.university}</Text>
           </View>
           <View style={[styles.ratingBadge, { backgroundColor: "rgba(255,255,255,0.15)" }]}>
-            <Feather name="star" size={14} color="#FFD700" />
+            <FeatherIcon name="star" size={14} color="#FFD700" />
             <Text style={styles.ratingValue}>{user?.rating.toFixed(1)}</Text>
           </View>
         </View>
@@ -256,13 +256,13 @@ export default function HomeScreen() {
                 {subscription.tripsUsed} / {subscription.tripsPerMonth === 999 ? "غير محدود" : subscription.tripsPerMonth} رحلة
               </Text>
             </View>
-            <Feather name="check-circle" size={18} color={colors.success} />
+            <FeatherIcon name="check-circle" size={18} color={colors.success} />
           </View>
         ) : (
           <View style={[styles.subStatusCard, { backgroundColor: "rgba(255,107,53,0.15)", borderColor: "rgba(255,107,53,0.3)" }]}>
-            <Feather name="alert-circle" size={16} color="#FF9E7A" />
+            <FeatherIcon name="alert-circle" size={16} color="#FF9E7A" />
             <Text style={styles.noSubText}>لا يوجد اشتراك نشط</Text>
-            <Feather name="chevron-left" size={16} color="#FF9E7A" />
+            <FeatherIcon name="chevron-left" size={16} color="#FF9E7A" />
           </View>
         )}
       </LinearGradient>
@@ -294,7 +294,7 @@ export default function HomeScreen() {
                 <Text style={styles.bookRideBtnSub}>إلى الجامعة أو من الجامعة</Text>
               </View>
               <View style={[styles.bookRideIcon, { backgroundColor: "#FF6B35" }]}>
-                <Feather name="navigation" size={22} color="#fff" />
+                <FeatherIcon name="navigation" size={22} color="#fff" />
               </View>
             </LinearGradient>
           </TouchableOpacity>
@@ -317,7 +317,7 @@ export default function HomeScreen() {
         <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
           <View style={[styles.modalHeader, { borderColor: colors.border }]}>
             <TouchableOpacity onPress={() => setShowBookModal(false)}>
-              <Feather name="x" size={22} color={colors.foreground} />
+              <FeatherIcon name="x" size={22} color={colors.foreground} />
             </TouchableOpacity>
             <Text style={[styles.modalTitle, { color: colors.foreground }]}>حجز رحلة</Text>
             <View style={{ width: 22 }} />
@@ -347,7 +347,7 @@ export default function HomeScreen() {
               />
             </View>
             <View style={[styles.fareEstimate, { backgroundColor: colors.secondary }]}>
-              <Feather name="tag" size={14} color={colors.primary} />
+              <FeatherIcon name="tag" size={14} color={colors.primary} />
               <Text style={[styles.fareEstimateText, { color: colors.foreground }]}>
                 التكلفة التقديرية: 75,000 دينار
               </Text>
@@ -357,7 +357,7 @@ export default function HomeScreen() {
               onPress={handleBookRide}
             >
               <Text style={styles.confirmBookBtnText}>تأكيد الحجز</Text>
-              <Feather name="arrow-left" size={18} color="#fff" />
+              <FeatherIcon name="arrow-left" size={18} color="#fff" />
             </TouchableOpacity>
           </View>
         </View>

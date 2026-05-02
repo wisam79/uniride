@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import FeatherIcon from "@/components/FeatherIcon";
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
@@ -15,7 +15,7 @@ export function TripMap(_props: TripMapProps) {
   const colors = useColors();
   return (
     <View style={[styles.placeholder, { backgroundColor: colors.secondary }]}>
-      <Feather name="map" size={32} color={colors.primary} />
+      <FeatherIcon name="map" size={32} color={colors.primary} />
       <Text style={[styles.text, { color: colors.mutedForeground }]}>
         الخريطة متاحة على الجهاز المحمول
       </Text>

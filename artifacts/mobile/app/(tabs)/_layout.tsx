@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import FeatherIcon from "@/components/FeatherIcon";
 import { BlurView } from "expo-blur";
 import { isLiquidGlassAvailable } from "expo-glass-effect";
 import { Redirect, Tabs } from "expo-router";
@@ -78,7 +78,7 @@ function ClassicTabLayout({ role }: { role: "student" | "driver" }) {
             isIOS ? (
               <SymbolView name="house.fill" tintColor={color} size={22} />
             ) : (
-              <Feather name="home" size={22} color={color} />
+              <FeatherIcon name="home" size={22} color={color} />
             ),
         }}
       />
@@ -90,7 +90,7 @@ function ClassicTabLayout({ role }: { role: "student" | "driver" }) {
             isIOS ? (
               <SymbolView name="car.fill" tintColor={color} size={22} />
             ) : (
-              <Feather name="map" size={22} color={color} />
+              <FeatherIcon name="map" size={22} color={color} />
             ),
         }}
       />
@@ -102,7 +102,7 @@ function ClassicTabLayout({ role }: { role: "student" | "driver" }) {
             isIOS ? (
               <SymbolView name="creditcard.fill" tintColor={color} size={22} />
             ) : (
-              <Feather name={role === "student" ? "credit-card" : "dollar-sign"} size={22} color={color} />
+              <FeatherIcon name={role === "student" ? "credit-card" : "dollar-sign"} size={22} color={color} />
             ),
         }}
       />
@@ -114,7 +114,7 @@ function ClassicTabLayout({ role }: { role: "student" | "driver" }) {
             isIOS ? (
               <SymbolView name="person.fill" tintColor={color} size={22} />
             ) : (
-              <Feather name="user" size={22} color={color} />
+              <FeatherIcon name="user" size={22} color={color} />
             ),
         }}
       />

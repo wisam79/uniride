@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import FeatherIcon from "@/components/FeatherIcon";
 import * as Haptics from "expo-haptics";
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
@@ -97,7 +97,7 @@ export function TripStatusCard({ trip, role, onComplete, onCancel }: TripStatusC
                   },
                 ]}
               >
-                <Feather
+                <FeatherIcon
                   name={step.icon as any}
                   size={12}
                   color={idx <= currentIdx ? "#fff" : colors.mutedForeground}
@@ -116,9 +116,9 @@ export function TripStatusCard({ trip, role, onComplete, onCancel }: TripStatusC
 
       {role === "driver" && trip.studentName && (
         <View style={[styles.infoRow, { borderColor: colors.border }]}>
-          <Feather name="user" size={14} color={colors.mutedForeground} />
+          <FeatherIcon name="user" size={14} color={colors.mutedForeground} />
           <Text style={[styles.infoText, { color: colors.foreground }]}>{trip.studentName}</Text>
-          <Feather name="map-pin" size={14} color={colors.accent} />
+          <FeatherIcon name="map-pin" size={14} color={colors.accent} />
           <Text style={[styles.infoText, { color: colors.foreground }]} numberOfLines={1}>{trip.destination.address}</Text>
         </View>
       )}
@@ -133,7 +133,7 @@ export function TripStatusCard({ trip, role, onComplete, onCancel }: TripStatusC
             <Text style={[styles.driverVehicle, { color: colors.mutedForeground }]}>{trip.driverVehicle}</Text>
           </View>
           <View style={styles.driverRating}>
-            <Feather name="star" size={12} color={colors.warning} />
+            <FeatherIcon name="star" size={12} color={colors.warning} />
             <Text style={[styles.ratingText, { color: colors.foreground }]}>{trip.driverRating}</Text>
           </View>
         </View>

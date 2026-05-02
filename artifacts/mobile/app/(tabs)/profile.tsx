@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import FeatherIcon from "@/components/FeatherIcon";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
@@ -99,7 +99,7 @@ export default function ProfileScreen() {
         disabled={!onPress && !toggle}
       >
         <View style={[styles.menuIcon, { backgroundColor: danger ? colors.destructive + "15" : colors.secondary }]}>
-          <Feather name={icon as any} size={16} color={danger ? colors.destructive : colors.primary} />
+          <FeatherIcon name={icon as any} size={16} color={danger ? colors.destructive : colors.primary} />
         </View>
         <Text style={[styles.menuLabel, { color: danger ? colors.destructive : colors.foreground }]}>{label}</Text>
         {toggle ? (
@@ -112,7 +112,7 @@ export default function ProfileScreen() {
         ) : (
           <View style={styles.menuRight}>
             {value && <Text style={[styles.menuValue, { color: colors.mutedForeground }]}>{value}</Text>}
-            {onPress && <Feather name="chevron-left" size={16} color={colors.mutedForeground} />}
+            {onPress && <FeatherIcon name="chevron-left" size={16} color={colors.mutedForeground} />}
           </View>
         )}
       </TouchableOpacity>
@@ -133,12 +133,12 @@ export default function ProfileScreen() {
             style={[styles.editAvatarBtn, { backgroundColor: "rgba(255,255,255,0.2)" }]}
             onPress={() => setEditModal(true)}
           >
-            <Feather name="edit-2" size={14} color="#fff" />
+            <FeatherIcon name="edit-2" size={14} color="#fff" />
           </TouchableOpacity>
         </View>
         <Text style={styles.userName}>{user?.name}</Text>
         <View style={styles.roleChip}>
-          <Feather name={role === "student" ? "book-open" : "truck"} size={12} color="#fff" />
+          <FeatherIcon name={role === "student" ? "book-open" : "truck"} size={12} color="#fff" />
           <Text style={styles.roleChipText}>{role === "student" ? "طالب جامعي" : "سائق"}</Text>
         </View>
 
@@ -227,7 +227,7 @@ export default function ProfileScreen() {
         <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
           <View style={[styles.modalHeader, { borderColor: colors.border }]}>
             <TouchableOpacity onPress={() => setEditModal(false)}>
-              <Feather name="x" size={22} color={colors.foreground} />
+              <FeatherIcon name="x" size={22} color={colors.foreground} />
             </TouchableOpacity>
             <Text style={[styles.modalTitle, { color: colors.foreground }]}>تعديل الملف</Text>
             <TouchableOpacity onPress={handleSave}>

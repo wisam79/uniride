@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import FeatherIcon from "@/components/FeatherIcon";
 import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
 import {
@@ -55,17 +55,17 @@ export default function SubscriptionScreen() {
 
           <View style={styles.earningsGrid}>
             <View style={[styles.earningBox, { backgroundColor: "rgba(255,255,255,0.1)" }]}>
-              <Feather name="sun" size={18} color="#FFD700" />
+              <FeatherIcon name="sun" size={18} color="#FFD700" />
               <Text style={styles.earningValue}>{(todayEarnings / 1000).toFixed(0)}k</Text>
               <Text style={styles.earningLabel}>اليوم (د.ع)</Text>
             </View>
             <View style={[styles.earningBox, { backgroundColor: "rgba(255,255,255,0.1)" }]}>
-              <Feather name="calendar" size={18} color="#5B8DEF" />
+              <FeatherIcon name="calendar" size={18} color="#5B8DEF" />
               <Text style={styles.earningValue}>{(weeklyEarnings / 1000).toFixed(0)}k</Text>
               <Text style={styles.earningLabel}>الأسبوع (د.ع)</Text>
             </View>
             <View style={[styles.earningBox, { backgroundColor: "rgba(255,255,255,0.1)" }]}>
-              <Feather name="trending-up" size={18} color="#22C55E" />
+              <FeatherIcon name="trending-up" size={18} color="#22C55E" />
               <Text style={styles.earningValue}>{(monthlyEarnings / 1000).toFixed(0)}k</Text>
               <Text style={styles.earningLabel}>الشهر (د.ع)</Text>
             </View>
@@ -129,7 +129,7 @@ export default function SubscriptionScreen() {
             {tripHistory.slice(0, 5).map((trip) => (
               <View key={trip.id} style={[styles.earningItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <View style={[styles.earningItemIcon, { backgroundColor: colors.primary + "15" }]}>
-                  <Feather name="navigation" size={14} color={colors.primary} />
+                  <FeatherIcon name="navigation" size={14} color={colors.primary} />
                 </View>
                 <View style={styles.earningItemInfo}>
                   <Text style={[styles.earningItemStudent, { color: colors.foreground }]}>{trip.studentName}</Text>
@@ -186,7 +186,7 @@ export default function SubscriptionScreen() {
                   <Text style={styles.activeSubDriver}>مع {subscription.driverName}</Text>
                 </View>
                 <View style={[styles.activeSubBadge, { backgroundColor: colors.success }]}>
-                  <Feather name="check" size={12} color="#fff" />
+                  <FeatherIcon name="check" size={12} color="#fff" />
                   <Text style={styles.activeSubBadgeText}>نشط</Text>
                 </View>
               </View>
@@ -232,7 +232,7 @@ export default function SubscriptionScreen() {
             {subscription?.isActive ? "تغيير الخطة" : "اختر خطتك"}
           </Text>
           <View style={[styles.featureNote, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
-            <Feather name="info" size={14} color={colors.primary} />
+            <FeatherIcon name="info" size={14} color={colors.primary} />
             <Text style={[styles.featureNoteText, { color: colors.foreground }]}>
               اشترك مع سائقك المفضل من الرئيسية · الأسعار بالدينار العراقي
             </Text>

@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import FeatherIcon from "@/components/FeatherIcon";
 import * as Haptics from "expo-haptics";
 import React from "react";
 import {
@@ -57,19 +57,19 @@ export function DriverCard({ driver, onSubscribe }: DriverCardProps) {
 
       <View style={[styles.statsRow, { borderColor: colors.border }]}>
         <View style={styles.stat}>
-          <Feather name="star" size={14} color={colors.warning} />
+          <FeatherIcon name="star" size={14} color={colors.warning} />
           <Text style={[styles.statValue, { color: colors.foreground }]}>{driver.rating}</Text>
           <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>التقييم</Text>
         </View>
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
         <View style={styles.stat}>
-          <Feather name="map" size={14} color={colors.primary} />
+          <FeatherIcon name="map" size={14} color={colors.primary} />
           <Text style={[styles.statValue, { color: colors.foreground }]}>{driver.totalTrips}</Text>
           <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>رحلة</Text>
         </View>
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
         <View style={styles.stat}>
-          <Feather name="book-open" size={14} color={colors.accent} />
+          <FeatherIcon name="book-open" size={14} color={colors.accent} />
           <Text style={[styles.statValue, { color: colors.foreground }]} numberOfLines={1}>{driver.university.replace("جامعة ", "")}</Text>
           <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>الجامعة</Text>
         </View>

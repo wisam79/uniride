@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import FeatherIcon from "@/components/FeatherIcon";
 import * as Haptics from "expo-haptics";
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
@@ -59,7 +59,7 @@ export function SubscriptionCard({ plan, isActive, onSelect }: SubscriptionCardP
       )}
       {isActive && (
         <View style={[styles.activeBadge, { backgroundColor: colors.success }]}>
-          <Feather name="check" size={10} color="#fff" />
+          <FeatherIcon name="check" size={10} color="#fff" />
           <Text style={styles.activeBadgeText}>مفعّل</Text>
         </View>
       )}
@@ -85,7 +85,7 @@ export function SubscriptionCard({ plan, isActive, onSelect }: SubscriptionCardP
       <View style={styles.features}>
         {plan.features.map((f, i) => (
           <View key={i} style={styles.featureRow}>
-            <Feather name="check-circle" size={13} color={accentColor} />
+            <FeatherIcon name="check-circle" size={13} color={accentColor} />
             <Text style={[styles.featureText, { color: textColor }]}>{f}</Text>
           </View>
         ))}
