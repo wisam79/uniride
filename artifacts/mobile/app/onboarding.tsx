@@ -2,7 +2,7 @@ import FeatherIcon from "@/components/FeatherIcon";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -22,7 +22,7 @@ import { UserRole, useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 import { api } from "@/lib/api";
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 const TESTIMONIALS = [
   { name: "أحمد", role: "طالب", quote: "أنقذني من تأخير المحاضرات!" },
@@ -35,66 +35,62 @@ const UNIVERSITIES = [
   "الجامعة الإسلامية", "جامعة الكوفة", "جامعة البصرة", "جامعة الموصل",
   "جامعة كربلاء", "جامعة ذي قار", "جامعة ميسان", "جامعة واسط",
   "جامعة القادسية", "جامعة تكريت", "جامعة الأنبار", "جامعة كركوك",
-  "جامعة ديالى", "كلية الطب / بغداد", "المعهد التقني بغداد"
+  "جامعة ديالى", "كلية الطب / بغداد", "المعهد التقني بغداد",
 ];
 
-type Screen = "welcome" | "role" | "auth";
+type Screen = "welcome" | "role" | "auth" | "otp";
 type AuthMode = "login" | "register";
+
+const OTP_RESEND_SECONDS = 60;
 
 export default function Onboarding() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { login, isLoading } = useApp();
+
   const [screen, setScreen] = useState<Screen>("welcome");
   const [role, setRole] = useState<UserRole>("student");
   const [authMode, setAuthMode] = useState<AuthMode>("login");
+
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [university, setUniversity] = useState("");
   const [vehicleType, setVehicleType] = useState("");
   const [vehiclePlate, setVehiclePlate] = useState("");
-  const [vehicleColor, setVehicleColor] = useState("white");
+  const [vehicleColor, setVehicleColor] = useState("أبيض");
+  const [showUniDropdown, setShowUniDropdown] = useState(false);
+
+  const [otpDigits, setOtpDigits] = useState(["", "", "", "", "", ""]);
+  const otpRefs = useRef<(TextInput | null)[]>([null, null, null, null, null, null]);
+  const [resendTimer, setResendTimer] = useState(0);
+  const resendInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const [loading, setLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [error, setError] = useState("");
-  const [errors, setErrors] = useState<{ phone?: string; name?: string; password?: string }>({});
-  const [showUniDropdown, setShowUniDropdown] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<{ phone?: string; name?: string }>({});
 
-  // Floating particles animations
-  const particles = useRef([...Array(6)].map(() => ({
-    x: Math.random() * SCREEN_WIDTH,
-    y: Math.random() * 500,
-    anim: new Animated.Value(0),
-    duration: 3000 + Math.random() * 4000
-  }))).current;
-
-  // Animations
   const logoAnim = useRef(new Animated.Value(0)).current;
-  const featuresAnims = useRef([
-    new Animated.Value(0),
-    new Animated.Value(0),
-    new Animated.Value(0),
-    new Animated.Value(0),
-  ]).current;
+  const featuresAnims = useRef([0, 0, 0, 0].map(() => new Animated.Value(0))).current;
   const errorAnim = useRef(new Animated.Value(-20)).current;
   const errorOpacity = useRef(new Animated.Value(0)).current;
+  const otpShakeAnim = useRef(new Animated.Value(0)).current;
+
+  const particles = useRef(
+    [...Array(6)].map(() => ({
+      x: Math.random() * SCREEN_WIDTH,
+      y: Math.random() * 500,
+      anim: new Animated.Value(0),
+      duration: 3000 + Math.random() * 4000,
+    }))
+  ).current;
 
   useEffect(() => {
-    particles.forEach(p => {
+    particles.forEach((p) => {
       Animated.loop(
         Animated.sequence([
-          Animated.timing(p.anim, {
-            toValue: 1,
-            duration: p.duration,
-            useNativeDriver: true,
-          }),
-          Animated.timing(p.anim, {
-            toValue: 0,
-            duration: p.duration,
-            useNativeDriver: true,
-          })
+          Animated.timing(p.anim, { toValue: 1, duration: p.duration, useNativeDriver: true }),
+          Animated.timing(p.anim, { toValue: 0, duration: p.duration, useNativeDriver: true }),
         ])
       ).start();
     });
@@ -102,22 +98,14 @@ export default function Onboarding() {
 
   useEffect(() => {
     if (screen === "welcome") {
-      // Logo pulse/rotate
       Animated.loop(
         Animated.sequence([
           Animated.timing(logoAnim, { toValue: 1, duration: 2000, useNativeDriver: true }),
           Animated.timing(logoAnim, { toValue: 0, duration: 2000, useNativeDriver: true }),
         ])
       ).start();
-
-      // Sequential feature fade-in
       featuresAnims.forEach((anim, i) => {
-        Animated.timing(anim, {
-          toValue: 1,
-          duration: 500,
-          delay: 400 + i * 200,
-          useNativeDriver: true,
-        }).start();
+        Animated.timing(anim, { toValue: 1, duration: 500, delay: 400 + i * 200, useNativeDriver: true }).start();
       });
     }
   }, [screen]);
@@ -134,6 +122,39 @@ export default function Onboarding() {
     }
   }, [error]);
 
+  useEffect(() => {
+    return () => {
+      if (resendInterval.current) clearInterval(resendInterval.current);
+    };
+  }, []);
+
+  const startResendTimer = useCallback(() => {
+    setResendTimer(OTP_RESEND_SECONDS);
+    if (resendInterval.current) clearInterval(resendInterval.current);
+    resendInterval.current = setInterval(() => {
+      setResendTimer((prev) => {
+        if (prev <= 1) {
+          clearInterval(resendInterval.current!);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
+  const shakeOtp = useCallback(() => {
+    otpShakeAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(otpShakeAnim, { toValue: 10, duration: 60, useNativeDriver: true }),
+      Animated.timing(otpShakeAnim, { toValue: -10, duration: 60, useNativeDriver: true }),
+      Animated.timing(otpShakeAnim, { toValue: 8, duration: 60, useNativeDriver: true }),
+      Animated.timing(otpShakeAnim, { toValue: 0, duration: 60, useNativeDriver: true }),
+    ]).start();
+  }, [otpShakeAnim]);
+
+  const logoRotation = logoAnim.interpolate({ inputRange: [0, 1], outputRange: ["-10deg", "10deg"] });
+  const logoScale = logoAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.1, 1] });
+
   function goToRole() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setScreen("role");
@@ -145,101 +166,179 @@ export default function Onboarding() {
     setScreen("auth");
   }
 
-  async function handleAuth() {
-    const newErrors: { phone?: string; name?: string; password?: string } = {};
-    if (!phone.trim()) {
+  async function handleSendOtp() {
+    const newErrors: { phone?: string; name?: string } = {};
+    const trimPhone = phone.trim();
+
+    if (!trimPhone) {
       newErrors.phone = "رقم الهاتف مطلوب";
-    } else if (!/^07\d{9}$/.test(phone.trim())) {
-      newErrors.phone = "رقم الهاتف يجب أن يكون 11 رقماً ويبدأ بـ 07";
+    } else if (!/^07\d{9}$/.test(trimPhone)) {
+      newErrors.phone = "يجب أن يبدأ بـ 07 ويكون 11 رقماً";
     }
 
-    if (authMode === "register") {
-      if (!name.trim()) {
-        newErrors.name = "الاسم مطلوب";
-      } else if (name.trim().length < 3) {
-        newErrors.name = "الاسم يجب أن يكون 3 أحرف على الأقل";
-      }
-    }
-
-    if (!password || password.length < 6) {
-      newErrors.password = "كلمة المرور يجب أن تكون 6 أحرف على الأقل";
+    if (authMode === "register" && !name.trim()) {
+      newErrors.name = "الاسم مطلوب";
+    } else if (authMode === "register" && name.trim().length < 2) {
+      newErrors.name = "الاسم يجب أن يكون حرفين على الأقل";
     }
 
     if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      setError("يرجى تصحيح الأخطاء أدناه");
+      setFieldErrors(newErrors);
+      setError("يرجى تصحيح الأخطاء");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
 
+    setFieldErrors({});
     setError("");
-    setErrors({});
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setLoading(true);
-    try {
-      let authData;
-      if (authMode === "register") {
-        authData = await api.post<{ token: string; user: any }>("/auth/register", {
-          name: name.trim(),
-          phone: phone.trim(),
-          password,
-          role,
-          university: role === "student" ? (university.trim() || "جامعة بغداد") : undefined,
-          vehicleType: role === "driver" ? (vehicleType.trim() || undefined) : undefined,
-          vehiclePlate: role === "driver" ? (vehiclePlate.trim() || undefined) : undefined,
-          vehicleColor: role === "driver" ? (vehicleColor || "أبيض") : undefined,
-        });
-      } else {
-        authData = await api.post<{ token: string; user: any }>("/auth/login", {
-          phone: phone.trim(),
-          password,
-        });
-      }
 
-      const { token, user } = authData;
-      await login(user, token);
-      setShowSuccess(true);
-      setTimeout(() => {
-        router.replace("/(tabs)");
-      }, 1500);
+    try {
+      await api.post("/auth/send-otp", { phone: trimPhone });
+      setOtpDigits(["", "", "", "", "", ""]);
+      startResendTimer();
+      setScreen("otp");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setTimeout(() => otpRefs.current[0]?.focus(), 300);
     } catch (err: any) {
-      setError(err.message || "حدث خطأ، حاول مرة أخرى");
+      setError(err?.response?.data?.error ?? err.message ?? "حدث خطأ، حاول مرة أخرى");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setLoading(false);
     }
   }
 
-  const logoRotation = logoAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["-10deg", "10deg"],
-  });
+  async function handleVerifyOtp() {
+    const code = otpDigits.join("");
+    if (code.length !== 6) {
+      setError("أدخل الرمز المكوّن من 6 أرقام");
+      shakeOtp();
+      return;
+    }
 
-  const logoScale = logoAnim.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [1, 1.1, 1],
-  });
+    setError("");
+    setLoading(true);
 
-  if (isLoading) {
-    return (
-      <LinearGradient colors={["#0D2847", "#1A3C6E"]} style={styles.loadingContainer}>
-        <Animated.View style={[styles.loadingLogo, { transform: [{ rotate: logoRotation }, { scale: logoScale }] }]}>
-          <FeatherIcon name="navigation" size={60} color="#FF6B35" />
-        </Animated.View>
-        <LoadingText label="جاري التحميل" />
-      </LinearGradient>
-    );
+    try {
+      const payload: Record<string, unknown> = {
+        phone: phone.trim(),
+        code,
+      };
+
+      if (authMode === "register") {
+        payload.name = name.trim();
+        payload.role = role;
+        payload.university = role === "student" ? (university.trim() || "جامعة بغداد") : undefined;
+        payload.vehicleType = role === "driver" ? (vehicleType.trim() || undefined) : undefined;
+        payload.vehiclePlate = role === "driver" ? (vehiclePlate.trim() || undefined) : undefined;
+        payload.vehicleColor = role === "driver" ? vehicleColor : undefined;
+      }
+
+      const data = await api.post<{ token?: string; user?: any; verified?: boolean; isNewUser?: boolean }>(
+        "/auth/verify-otp",
+        payload
+      );
+
+      if (data.verified && data.isNewUser && !data.token) {
+        setError("حدث خطأ، أعد المحاولة");
+        return;
+      }
+
+      if (data.token && data.user) {
+        await login(data.user, data.token);
+        setShowSuccess(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setTimeout(() => router.replace("/(tabs)"), 1500);
+      }
+    } catch (err: any) {
+      const msg = err?.response?.data?.error ?? err.message ?? "رمز التحقق غير صحيح";
+      setError(msg);
+      shakeOtp();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  if (showSuccess) {
-    return (
-      <View style={[styles.successContainer, { backgroundColor: colors.background }]}>
-        <Animated.View style={styles.successIcon}>
-          <FeatherIcon name="check-circle" size={80} color="#22C55E" />
-        </Animated.View>
-        <Text style={[styles.successTitle, { color: colors.foreground }]}>مرحباً بك في يونيرايد! 👋</Text>
-      </View>
-    );
+  async function handleResendOtp() {
+    if (resendTimer > 0) return;
+    setLoading(true);
+    setError("");
+    try {
+      await api.post("/auth/send-otp", { phone: phone.trim() });
+      setOtpDigits(["", "", "", "", "", ""]);
+      startResendTimer();
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      setTimeout(() => otpRefs.current[0]?.focus(), 200);
+    } catch (err: any) {
+      setError(err?.response?.data?.error ?? "فشل إعادة الإرسال");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleOtpDigit(text: string, index: number) {
+    const digit = text.replace(/\D/g, "").slice(-1);
+    const newDigits = [...otpDigits];
+    newDigits[index] = digit;
+    setOtpDigits(newDigits);
+    setError("");
+
+    if (digit && index < 5) {
+      otpRefs.current[index + 1]?.focus();
+    }
+    if (newDigits.every((d) => d !== "") && newDigits.join("").length === 6) {
+      setTimeout(() => handleVerifyOtpAuto(newDigits.join("")), 100);
+    }
+  }
+
+  function handleOtpKeyPress(key: string, index: number) {
+    if (key === "Backspace") {
+      const newDigits = [...otpDigits];
+      if (newDigits[index]) {
+        newDigits[index] = "";
+        setOtpDigits(newDigits);
+      } else if (index > 0) {
+        newDigits[index - 1] = "";
+        setOtpDigits(newDigits);
+        otpRefs.current[index - 1]?.focus();
+      }
+    }
+  }
+
+  async function handleVerifyOtpAuto(code: string) {
+    setLoading(true);
+    setError("");
+    try {
+      const payload: Record<string, unknown> = { phone: phone.trim(), code };
+      if (authMode === "register") {
+        payload.name = name.trim();
+        payload.role = role;
+        payload.university = role === "student" ? (university.trim() || "جامعة بغداد") : undefined;
+        payload.vehicleType = role === "driver" ? (vehicleType.trim() || undefined) : undefined;
+        payload.vehiclePlate = role === "driver" ? (vehiclePlate.trim() || undefined) : undefined;
+        payload.vehicleColor = role === "driver" ? vehicleColor : undefined;
+      }
+
+      const data = await api.post<{ token?: string; user?: any; verified?: boolean; isNewUser?: boolean }>(
+        "/auth/verify-otp",
+        payload
+      );
+
+      if (data.token && data.user) {
+        await login(data.user, data.token);
+        setShowSuccess(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setTimeout(() => router.replace("/(tabs)"), 1500);
+      }
+    } catch (err: any) {
+      const msg = err?.response?.data?.error ?? "رمز التحقق غير صحيح";
+      setError(msg);
+      shakeOtp();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setLoading(false);
+    }
   }
 
   const BackgroundParticles = () => (
@@ -253,31 +352,40 @@ export default function Onboarding() {
               left: p.x,
               top: p.y,
               opacity: p.anim.interpolate({ inputRange: [0, 1], outputRange: [0.05, 0.15] }),
-              transform: [
-                { translateY: p.anim.interpolate({ inputRange: [0, 1], outputRange: [-30, 30] }) }
-              ]
-            }
+              transform: [{ translateY: p.anim.interpolate({ inputRange: [0, 1], outputRange: [-30, 30] }) }],
+            },
           ]}
         />
       ))}
     </View>
   );
 
+  if (isLoading) {
+    return (
+      <LinearGradient colors={["#0D2847", "#1A3C6E"]} style={styles.loadingContainer}>
+        <Animated.View style={{ transform: [{ rotate: logoRotation }, { scale: logoScale }] }}>
+          <FeatherIcon name="navigation" size={60} color="#FF6B35" />
+        </Animated.View>
+        <LoadingText label="جاري التحميل" />
+      </LinearGradient>
+    );
+  }
+
+  if (showSuccess) {
+    return (
+      <View style={[styles.successContainer, { backgroundColor: colors.background }]}>
+        <FeatherIcon name="check-circle" size={80} color="#22C55E" />
+        <Text style={[styles.successTitle, { color: colors.foreground }]}>مرحباً بك في يونيرايد!</Text>
+      </View>
+    );
+  }
+
   if (screen === "welcome") {
     return (
-      <LinearGradient
-        colors={["#0D2847", "#1A3C6E", "#1A3C6E"]}
-        style={[styles.welcomeContainer, { paddingTop: insets.top + 40 }]}
-      >
+      <LinearGradient colors={["#0D2847", "#1A3C6E", "#1A3C6E"]} style={[styles.welcomeContainer, { paddingTop: insets.top + 40 }]}>
         <BackgroundParticles />
         <View style={styles.logoArea}>
-          <Animated.View style={[
-            styles.logoCircle, 
-            { 
-              backgroundColor: "rgba(255,107,53,0.15)",
-              transform: [{ rotate: logoRotation }, { scale: logoScale }]
-            }
-          ]}>
+          <Animated.View style={[styles.logoCircle, { backgroundColor: "rgba(255,107,53,0.15)", transform: [{ rotate: logoRotation }, { scale: logoScale }] }]}>
             <FeatherIcon name="navigation" size={40} color="#FF6B35" />
           </Animated.View>
           <Text style={styles.appName}>يونيرايد</Text>
@@ -286,14 +394,7 @@ export default function Onboarding() {
         </View>
 
         <View style={styles.testimonialContainer}>
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false} 
-            pagingEnabled
-            snapToInterval={SCREEN_WIDTH - 48}
-            decelerationRate="fast"
-            contentContainerStyle={styles.testimonialContent}
-          >
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} pagingEnabled snapToInterval={SCREEN_WIDTH - 48} decelerationRate="fast" contentContainerStyle={styles.testimonialContent}>
             {TESTIMONIALS.map((t, i) => (
               <View key={i} style={styles.testimonialCard}>
                 <FeatherIcon name="quote" size={20} color="rgba(255,107,53,0.5)" />
@@ -311,10 +412,7 @@ export default function Onboarding() {
             { icon: "credit-card", text: "اشتراك شهري" },
             { icon: "star", text: "سائقون موثوقون" },
           ].map((f, i) => (
-            <Animated.View 
-              key={f.text} 
-              style={[styles.featureItem, { opacity: featuresAnims[i], transform: [{ translateY: featuresAnims[i].interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }]}
-            >
+            <Animated.View key={f.text} style={[styles.featureItem, { opacity: featuresAnims[i], transform: [{ translateY: featuresAnims[i]!.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }]}>
               <View style={[styles.featureIcon, { backgroundColor: "rgba(255,255,255,0.1)" }]}>
                 <FeatherIcon name={f.icon as any} size={20} color="#FF9E7A" />
               </View>
@@ -325,12 +423,7 @@ export default function Onboarding() {
 
         <View style={[styles.welcomeBottom, { paddingBottom: insets.bottom + 32 }]}>
           <TouchableOpacity onPress={goToRole} activeOpacity={0.85} style={styles.gradientBtnWrapper}>
-            <LinearGradient
-              colors={["#FF6B35", "#FF8C5A"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.startBtn}
-            >
+            <LinearGradient colors={["#FF6B35", "#FF8C5A"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.startBtn}>
               <Text style={styles.startBtnText}>ابدأ الآن</Text>
               <FeatherIcon name="arrow-left" size={18} color="#fff" />
             </LinearGradient>
@@ -343,75 +436,151 @@ export default function Onboarding() {
 
   if (screen === "role") {
     return (
-      <LinearGradient
-        colors={["#0D2847", "#1A3C6E"]}
-        style={[styles.roleContainer, { paddingTop: insets.top + 20 }]}
-      >
+      <LinearGradient colors={["#0D2847", "#1A3C6E"]} style={[styles.roleContainer, { paddingTop: insets.top + 20 }]}>
         <BackgroundParticles />
         <View style={styles.progressContainer}>
           <View style={[styles.progressDot, styles.progressDotActive]} />
           <View style={styles.progressDot} />
           <View style={styles.progressDot} />
         </View>
-
         <TouchableOpacity style={styles.backBtn} onPress={() => setScreen("welcome")}>
           <FeatherIcon name="arrow-right" size={22} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.roleTitle}>من أنت؟</Text>
         <Text style={styles.roleSubtitle}>اختر نوع حسابك للمتابعة</Text>
         <View style={[styles.roleCards, { paddingBottom: insets.bottom + 40 }]}>
-          <TouchableOpacity
-            style={[styles.roleCard, { backgroundColor: "rgba(255,255,255,0.1)" }]}
-            onPress={() => selectRole("student")} activeOpacity={0.8}
-          >
-            <View style={styles.roleBadge}>
-              <Text style={styles.roleBadgeText}>✓ مجاني للتسجيل</Text>
-            </View>
-            <View style={[styles.roleIconBig, { backgroundColor: "rgba(255,107,53,0.2)" }]}>
-              <FeatherIcon name="book-open" size={36} color="#FF6B35" />
-            </View>
-            <Text style={styles.roleCardTitle}>طالب جامعي</Text>
-            <Text style={styles.roleCardDesc}>اشترك مع سائق وتابع رحلتك اليومية إلى الجامعة بأمان</Text>
-            <View style={[styles.roleArrow, { backgroundColor: "#FF6B35" }]}>
-              <FeatherIcon name="arrow-left" size={16} color="#fff" />
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.roleCard, { backgroundColor: "rgba(255,255,255,0.1)" }]}
-            onPress={() => selectRole("driver")} activeOpacity={0.8}
-          >
-            <View style={styles.roleBadge}>
-              <Text style={styles.roleBadgeText}>✓ مجاني للتسجيل</Text>
-            </View>
-            <View style={[styles.roleIconBig, { backgroundColor: "rgba(91,141,239,0.2)" }]}>
-              <FeatherIcon name="truck" size={36} color="#5B8DEF" />
-            </View>
-            <Text style={styles.roleCardTitle}>سائق</Text>
-            <Text style={styles.roleCardDesc}>قدم خدمات النقل للطلاب واكسب دخلاً ثابتاً شهرياً</Text>
-            <View style={[styles.roleArrow, { backgroundColor: "#5B8DEF" }]}>
-              <FeatherIcon name="arrow-left" size={16} color="#fff" />
-            </View>
-          </TouchableOpacity>
+          {[
+            { r: "student" as UserRole, icon: "book-open", color: "#FF6B35", bg: "rgba(255,107,53,0.2)", title: "طالب جامعي", desc: "اشترك مع سائق وتابع رحلتك اليومية إلى الجامعة بأمان" },
+            { r: "driver" as UserRole, icon: "truck", color: "#5B8DEF", bg: "rgba(91,141,239,0.2)", title: "سائق", desc: "قدم خدمات النقل للطلاب واكسب دخلاً ثابتاً شهرياً" },
+          ].map((item) => (
+            <TouchableOpacity key={item.r} style={[styles.roleCard, { backgroundColor: "rgba(255,255,255,0.1)" }]} onPress={() => selectRole(item.r)} activeOpacity={0.8}>
+              <View style={styles.roleBadge}><Text style={styles.roleBadgeText}>✓ مجاني للتسجيل</Text></View>
+              <View style={[styles.roleIconBig, { backgroundColor: item.bg }]}>
+                <FeatherIcon name={item.icon as any} size={36} color={item.color} />
+              </View>
+              <Text style={styles.roleCardTitle}>{item.title}</Text>
+              <Text style={styles.roleCardDesc}>{item.desc}</Text>
+              <View style={[styles.roleArrow, { backgroundColor: item.color }]}>
+                <FeatherIcon name="arrow-left" size={16} color="#fff" />
+              </View>
+            </TouchableOpacity>
+          ))}
         </View>
       </LinearGradient>
     );
   }
 
+  if (screen === "otp") {
+    const otpCode = otpDigits.join("");
+    return (
+      <KeyboardAvoidingView style={[styles.authContainer, { backgroundColor: colors.background }]} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <LinearGradient colors={["#0D2847", "#1A3C6E"]} style={[styles.authHeader, { paddingTop: insets.top + 16 }]}>
+          <View style={styles.progressContainerSmall}>
+            {[0, 1, 2].map((i) => (
+              <View key={i} style={[styles.progressDot, i <= 2 && styles.progressDotActive]} />
+            ))}
+          </View>
+          <TouchableOpacity style={styles.backBtn} onPress={() => { setScreen("auth"); setError(""); }}>
+            <FeatherIcon name="arrow-right" size={22} color="#fff" />
+          </TouchableOpacity>
+          <View style={styles.authHeaderContent}>
+            <Text style={styles.authTitle}>أدخل رمز التحقق</Text>
+            <Text style={styles.authSubtitle}>
+              تم إرسال رمز مكوّن من 6 أرقام إلى واتساب{"\n"}
+              <Text style={{ color: "#FF6B35", fontFamily: "Inter_700Bold" }}>{phone}</Text>
+            </Text>
+          </View>
+        </LinearGradient>
+
+        <ScrollView contentContainerStyle={[styles.authFormContent, { paddingBottom: insets.bottom + 40 }]} keyboardShouldPersistTaps="handled">
+          <View style={styles.otpIllustration}>
+            <View style={[styles.otpIconCircle, { backgroundColor: "#25D366" + "20" }]}>
+              <FeatherIcon name="message-circle" size={36} color="#25D366" />
+            </View>
+            <Text style={[styles.otpHint, { color: colors.mutedForeground }]}>
+              تحقق من واتساب وأدخل الرمز هنا
+            </Text>
+          </View>
+
+          {error ? (
+            <Animated.View style={[styles.errorBox, { backgroundColor: "#FEE2E2", opacity: errorOpacity, transform: [{ translateY: errorAnim }] }]}>
+              <FeatherIcon name="alert-circle" size={14} color="#DC2626" />
+              <Text style={styles.errorText}>{error}</Text>
+            </Animated.View>
+          ) : null}
+
+          <Animated.View style={[styles.otpRow, { transform: [{ translateX: otpShakeAnim }] }]}>
+            {otpDigits.map((digit, i) => (
+              <TextInput
+                key={i}
+                ref={(r) => { otpRefs.current[i] = r; }}
+                style={[
+                  styles.otpInput,
+                  {
+                    backgroundColor: colors.card,
+                    borderColor: digit ? colors.primary : error ? "#EF4444" : colors.border,
+                    color: colors.foreground,
+                    borderWidth: digit ? 2 : 1,
+                  },
+                ]}
+                value={digit}
+                onChangeText={(t) => handleOtpDigit(t, i)}
+                onKeyPress={({ nativeEvent }) => handleOtpKeyPress(nativeEvent.key, i)}
+                keyboardType="number-pad"
+                maxLength={1}
+                textAlign="center"
+                selectTextOnFocus
+              />
+            ))}
+          </Animated.View>
+
+          <TouchableOpacity
+            style={[styles.authBtn, { backgroundColor: colors.primary, opacity: loading || otpCode.length !== 6 ? 0.7 : 1, marginTop: 8 }]}
+            onPress={handleVerifyOtp}
+            disabled={loading || otpCode.length !== 6}
+            activeOpacity={0.85}
+          >
+            {loading ? <LoadingText label="جاري التحقق" /> : (
+              <>
+                <Text style={styles.authBtnText}>تأكيد الرمز</Text>
+                <FeatherIcon name="check" size={18} color="#fff" />
+              </>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.resendRow}>
+            {resendTimer > 0 ? (
+              <Text style={[styles.resendHint, { color: colors.mutedForeground }]}>
+                إعادة الإرسال بعد <Text style={{ color: colors.primary, fontFamily: "Inter_700Bold" }}>{resendTimer}</Text> ثانية
+              </Text>
+            ) : (
+              <TouchableOpacity onPress={handleResendOtp} disabled={loading}>
+                <Text style={[styles.resendBtn, { color: "#25D366" }]}>
+                  ⟳ إعادة إرسال الرمز عبر واتساب
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <View style={[styles.whatsappNote, { backgroundColor: "#25D36615", borderColor: "#25D36630" }]}>
+            <FeatherIcon name="info" size={14} color="#25D366" />
+            <Text style={[styles.whatsappNoteText, { color: colors.mutedForeground }]}>
+              الرمز صالح لمدة 5 دقائق فقط ولا يمكن استخدامه مرتين
+            </Text>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    );
+  }
+
   return (
-    <KeyboardAvoidingView
-      style={[styles.authContainer, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <LinearGradient
-        colors={["#0D2847", "#1A3C6E"]}
-        style={[styles.authHeader, { paddingTop: insets.top + 16 }]}
-      >
+    <KeyboardAvoidingView style={[styles.authContainer, { backgroundColor: colors.background }]} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <LinearGradient colors={["#0D2847", "#1A3C6E"]} style={[styles.authHeader, { paddingTop: insets.top + 16 }]}>
         <View style={styles.progressContainerSmall}>
           <View style={[styles.progressDot, styles.progressDotActive]} />
           <View style={[styles.progressDot, styles.progressDotActive]} />
           <View style={styles.progressDot} />
         </View>
-
         <TouchableOpacity style={styles.backBtn} onPress={() => setScreen("role")}>
           <FeatherIcon name="arrow-right" size={22} color="#fff" />
         </TouchableOpacity>
@@ -424,35 +593,18 @@ export default function Onboarding() {
         </View>
       </LinearGradient>
 
-      <ScrollView
-        style={styles.authForm}
-        contentContainerStyle={[styles.authFormContent, { paddingBottom: insets.bottom + 40 }]}
-        keyboardShouldPersistTaps="handled"
-      >
+      <ScrollView style={styles.authForm} contentContainerStyle={[styles.authFormContent, { paddingBottom: insets.bottom + 40 }]} keyboardShouldPersistTaps="handled">
         <View style={styles.authToggle}>
-          <TouchableOpacity
-            style={[styles.toggleBtn, authMode === "login" && { backgroundColor: colors.primary }]}
-            onPress={() => { setAuthMode("login"); setError(""); }}
-          >
+          <TouchableOpacity style={[styles.toggleBtn, authMode === "login" && { backgroundColor: colors.primary }]} onPress={() => { setAuthMode("login"); setError(""); setFieldErrors({}); }}>
             <Text style={[styles.toggleBtnText, { color: authMode === "login" ? "#fff" : colors.mutedForeground }]}>تسجيل الدخول</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.toggleBtn, authMode === "register" && { backgroundColor: colors.primary }]}
-            onPress={() => { setAuthMode("register"); setError(""); }}
-          >
+          <TouchableOpacity style={[styles.toggleBtn, authMode === "register" && { backgroundColor: colors.primary }]} onPress={() => { setAuthMode("register"); setError(""); setFieldErrors({}); }}>
             <Text style={[styles.toggleBtnText, { color: authMode === "register" ? "#fff" : colors.mutedForeground }]}>حساب جديد</Text>
           </TouchableOpacity>
         </View>
 
         {error ? (
-          <Animated.View style={[
-            styles.errorBox, 
-            { 
-              backgroundColor: "#FEE2E2",
-              opacity: errorOpacity,
-              transform: [{ translateY: errorAnim }]
-            }
-          ]}>
+          <Animated.View style={[styles.errorBox, { backgroundColor: "#FEE2E2", opacity: errorOpacity, transform: [{ translateY: errorAnim }] }]}>
             <FeatherIcon name="alert-circle" size={14} color="#DC2626" />
             <Text style={styles.errorText}>{error}</Text>
           </Animated.View>
@@ -462,14 +614,11 @@ export default function Onboarding() {
           <View style={styles.field}>
             <Text style={[styles.label, { color: colors.mutedForeground }]}>الاسم الكامل</Text>
             <TextInput
-              style={[
-                styles.input, 
-                { backgroundColor: colors.card, borderColor: errors.name ? "#EF4444" : colors.border, color: colors.foreground }
-              ]}
+              style={[styles.input, { backgroundColor: colors.card, borderColor: fieldErrors.name ? "#EF4444" : colors.border, color: colors.foreground }]}
               value={name} onChangeText={setName}
               placeholder="أدخل اسمك الكامل" placeholderTextColor={colors.mutedForeground} textAlign="right"
             />
-            {errors.name && <Text style={styles.fieldError}>{errors.name}</Text>}
+            {fieldErrors.name && <Text style={styles.fieldError}>{fieldErrors.name}</Text>}
           </View>
         )}
 
@@ -477,11 +626,7 @@ export default function Onboarding() {
           <Text style={[styles.label, { color: colors.mutedForeground }]}>رقم الهاتف</Text>
           <View style={styles.phoneInputContainer}>
             <TextInput
-              style={[
-                styles.input, 
-                styles.phoneInput, 
-                { backgroundColor: colors.card, borderColor: errors.phone ? "#EF4444" : colors.border, color: colors.foreground }
-              ]}
+              style={[styles.input, styles.phoneInput, { backgroundColor: colors.card, borderColor: fieldErrors.phone ? "#EF4444" : colors.border, color: colors.foreground }]}
               value={phone} onChangeText={setPhone}
               placeholder="07XX XXX XXXX" placeholderTextColor={colors.mutedForeground}
               keyboardType="phone-pad" textAlign="right"
@@ -490,57 +635,21 @@ export default function Onboarding() {
               <Text style={styles.phonePrefixText}>+964 🇮🇶</Text>
             </View>
           </View>
-          {errors.phone && <Text style={styles.fieldError}>{errors.phone}</Text>}
-        </View>
-
-        <View style={styles.field}>
-          <Text style={[styles.label, { color: colors.mutedForeground }]}>كلمة المرور</Text>
-          <View style={styles.passwordInputContainer}>
-            <TextInput
-              style={[
-                styles.input, 
-                styles.passwordInput,
-                { backgroundColor: colors.card, borderColor: errors.password ? "#EF4444" : colors.border, color: colors.foreground }
-              ]}
-              value={password} onChangeText={setPassword}
-              placeholder="••••••••" placeholderTextColor={colors.mutedForeground}
-              secureTextEntry={!showPassword} textAlign="right"
-            />
-            <TouchableOpacity 
-              style={styles.passwordToggle} 
-              onPress={() => setShowPassword(!showPassword)}
-            >
-              <FeatherIcon name={showPassword ? "eye-off" : "eye"} size={20} color={colors.mutedForeground} />
-            </TouchableOpacity>
-          </View>
-          {errors.password && <Text style={styles.fieldError}>{errors.password}</Text>}
+          {fieldErrors.phone && <Text style={styles.fieldError}>{fieldErrors.phone}</Text>}
         </View>
 
         {authMode === "register" && role === "student" && (
           <View style={styles.field}>
             <Text style={[styles.label, { color: colors.mutedForeground }]}>الجامعة</Text>
-            <TouchableOpacity 
-              style={[styles.input, styles.dropdownTrigger, { backgroundColor: colors.card, borderColor: colors.border }]}
-              onPress={() => setShowUniDropdown(!showUniDropdown)}
-            >
+            <TouchableOpacity style={[styles.input, styles.dropdownTrigger, { backgroundColor: colors.card, borderColor: colors.border }]} onPress={() => setShowUniDropdown(!showUniDropdown)}>
               <FeatherIcon name={showUniDropdown ? "chevron-up" : "chevron-down"} size={20} color={colors.mutedForeground} />
-              <Text style={[styles.dropdownValue, { color: university ? colors.foreground : colors.mutedForeground }]}>
-                {university || "اختر الجامعة"}
-              </Text>
+              <Text style={[styles.dropdownValue, { color: university ? colors.foreground : colors.mutedForeground }]}>{university || "اختر الجامعة"}</Text>
             </TouchableOpacity>
-            
             {showUniDropdown && (
               <View style={[styles.dropdownList, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled>
                   {UNIVERSITIES.map((uni) => (
-                    <TouchableOpacity 
-                      key={uni} 
-                      style={styles.dropdownItem}
-                      onPress={() => {
-                        setUniversity(uni);
-                        setShowUniDropdown(false);
-                      }}
-                    >
+                    <TouchableOpacity key={uni} style={styles.dropdownItem} onPress={() => { setUniversity(uni); setShowUniDropdown(false); }}>
                       <Text style={[styles.dropdownItemText, { color: colors.foreground }]}>{uni}</Text>
                     </TouchableOpacity>
                   ))}
@@ -555,47 +664,38 @@ export default function Onboarding() {
             <View style={styles.field}>
               <Text style={[styles.label, { color: colors.mutedForeground }]}>لون السيارة</Text>
               <View style={styles.colorPicker}>
-                {["white", "black", "#C0C0C0", "#DC2626", "#2563EB"].map((c) => (
-                  <TouchableOpacity
-                    key={c}
-                    style={[
-                      styles.colorCircle,
-                      { backgroundColor: c, borderColor: vehicleColor === (c === "white" ? "أبيض" : c === "black" ? "أسود" : c === "#C0C0C0" ? "فضي" : c === "#DC2626" ? "أحمر" : "أزرق") ? colors.primary : "transparent", borderWidth: 2 }
-                    ]}
-                    onPress={() => setVehicleColor(c === "white" ? "أبيض" : c === "black" ? "أسود" : c === "#C0C0C0" ? "فضي" : c === "#DC2626" ? "أحمر" : "أزرق")}
-                  />
+                {[
+                  { hex: "white", label: "أبيض" }, { hex: "black", label: "أسود" },
+                  { hex: "#C0C0C0", label: "فضي" }, { hex: "#DC2626", label: "أحمر" },
+                  { hex: "#2563EB", label: "أزرق" },
+                ].map((c) => (
+                  <TouchableOpacity key={c.hex} style={[styles.colorCircle, { backgroundColor: c.hex === "white" ? "#F8F8F8" : c.hex === "black" ? "#111" : c.hex, borderColor: vehicleColor === c.label ? colors.primary : "transparent", borderWidth: 2 }]} onPress={() => setVehicleColor(c.label)} />
                 ))}
               </View>
             </View>
             <View style={styles.field}>
               <Text style={[styles.label, { color: colors.mutedForeground }]}>نوع السيارة</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
-                value={vehicleType} onChangeText={setVehicleType}
-                placeholder="مثال: تويوتا كامري" placeholderTextColor={colors.mutedForeground} textAlign="right"
-              />
+              <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]} value={vehicleType} onChangeText={setVehicleType} placeholder="مثال: تويوتا كامري" placeholderTextColor={colors.mutedForeground} textAlign="right" />
             </View>
             <View style={styles.field}>
               <Text style={[styles.label, { color: colors.mutedForeground }]}>رقم اللوحة</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
-                value={vehiclePlate} onChangeText={setVehiclePlate}
-                placeholder="مثال: ب 1234 بغداد" placeholderTextColor={colors.mutedForeground} textAlign="right"
-              />
+              <TextInput style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]} value={vehiclePlate} onChangeText={setVehiclePlate} placeholder="مثال: ب 1234 بغداد" placeholderTextColor={colors.mutedForeground} textAlign="right" />
             </View>
           </>
         )}
 
-        <TouchableOpacity
-          style={[styles.authBtn, { backgroundColor: colors.primary, opacity: loading ? 0.7 : 1 }]}
-          onPress={handleAuth} disabled={loading} activeOpacity={0.85}
-        >
-          {loading ? (
-            <LoadingText />
-          ) : (
+        <View style={[styles.whatsappNote, { backgroundColor: "#25D36615", borderColor: "#25D36630", marginBottom: 4 }]}>
+          <FeatherIcon name="message-circle" size={14} color="#25D366" />
+          <Text style={[styles.whatsappNoteText, { color: colors.mutedForeground }]}>
+            سيتم إرسال رمز تحقق عبر واتساب لهذا الرقم
+          </Text>
+        </View>
+
+        <TouchableOpacity style={[styles.authBtn, { backgroundColor: colors.primary, opacity: loading ? 0.7 : 1 }]} onPress={handleSendOtp} disabled={loading} activeOpacity={0.85}>
+          {loading ? <LoadingText /> : (
             <>
-              <Text style={styles.authBtnText}>{authMode === "login" ? "دخول" : "إنشاء الحساب"}</Text>
-              <FeatherIcon name="arrow-left" size={18} color="#fff" />
+              <Text style={styles.authBtnText}>إرسال رمز واتساب</Text>
+              <FeatherIcon name="send" size={18} color="#fff" />
             </>
           )}
         </TouchableOpacity>
@@ -607,9 +707,7 @@ export default function Onboarding() {
 function LoadingText({ label = "جارٍ التحقق" }: { label?: string }) {
   const [dots, setDots] = useState("");
   useEffect(() => {
-    const interval = setInterval(() => {
-      setDots(prev => prev.length >= 3 ? "" : prev + ".");
-    }, 400);
+    const interval = setInterval(() => setDots((prev) => (prev.length >= 3 ? "" : prev + ".")), 400);
     return () => clearInterval(interval);
   }, []);
   return <Text style={styles.authBtnText}>{label}{dots}</Text>;
@@ -617,63 +715,52 @@ function LoadingText({ label = "جارٍ التحقق" }: { label?: string }) {
 
 const styles = StyleSheet.create({
   welcomeContainer: { flex: 1, paddingHorizontal: 24 },
-  loadingContainer: { flex: 1, alignItems: "center", justifyContent: "center" },
-  loadingLogo: { marginBottom: 24 },
-  successContainer: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
-  successIcon: { marginBottom: 24 },
+  loadingContainer: { flex: 1, alignItems: "center", justifyContent: "center", gap: 16 },
+  successContainer: { flex: 1, alignItems: "center", justifyContent: "center", gap: 16, padding: 24 },
   successTitle: { fontSize: 24, fontFamily: "Inter_700Bold", textAlign: "center" },
   particle: { position: "absolute", width: 40, height: 40, borderRadius: 20, backgroundColor: "#fff" },
-  fieldError: { color: "#EF4444", fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 4, textAlign: "right" },
-  passwordInputContainer: { position: "relative" },
-  passwordInput: { paddingLeft: 44 },
-  passwordToggle: { position: "absolute", left: 12, top: 12 },
   logoArea: { alignItems: "center", marginBottom: 30, zIndex: 1 },
   logoCircle: { width: 88, height: 88, borderRadius: 44, alignItems: "center", justifyContent: "center", marginBottom: 20 },
   appName: { fontSize: 36, fontFamily: "Inter_700Bold", color: "#FFFFFF", marginBottom: 4 },
   appNameEn: { fontSize: 16, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.5)", marginBottom: 16, letterSpacing: 2 },
   tagline: { fontSize: 16, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.75)", textAlign: "center", lineHeight: 26 },
-  
   testimonialContainer: { height: 100, marginBottom: 20 },
   testimonialContent: { gap: 12, paddingHorizontal: 12 },
   testimonialCard: { width: SCREEN_WIDTH - 72, backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 16, padding: 16, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
   testimonialQuote: { color: "#fff", fontSize: 14, fontFamily: "Inter_500Medium", textAlign: "center", marginBottom: 4 },
   testimonialAuthor: { color: "rgba(255,255,255,0.5)", fontSize: 12, fontFamily: "Inter_400Regular" },
-
   featuresGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, justifyContent: "center", marginVertical: 20 },
   featureItem: { width: "44%", alignItems: "center", gap: 8 },
   featureIcon: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center" },
   featureText: { fontSize: 13, fontFamily: "Inter_500Medium", color: "rgba(255,255,255,0.85)", textAlign: "center" },
-  
   welcomeBottom: { alignItems: "center", gap: 14 },
   gradientBtnWrapper: { width: "100%", borderRadius: 30, overflow: "hidden" },
   startBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 16, paddingHorizontal: 40, gap: 10 },
   startBtnText: { fontSize: 17, fontFamily: "Inter_700Bold", color: "#fff" },
   disclaimer: { fontSize: 11, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.45)", textAlign: "center" },
-  
   progressContainer: { flexDirection: "row", justifyContent: "center", gap: 8, marginBottom: 20 },
   progressContainerSmall: { flexDirection: "row", justifyContent: "center", gap: 6, marginBottom: 10 },
   progressDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "rgba(255,255,255,0.2)" },
   progressDotActive: { backgroundColor: "#FF6B35", width: 20 },
-
   roleContainer: { flex: 1, paddingHorizontal: 24 },
   backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center", marginBottom: 12 },
   roleTitle: { fontSize: 28, fontFamily: "Inter_700Bold", color: "#fff", marginBottom: 8, textAlign: "right" },
   roleSubtitle: { fontSize: 15, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.65)", marginBottom: 24, textAlign: "right" },
   roleCards: { flex: 1, gap: 16 },
   roleCard: { borderRadius: 20, padding: 24, borderWidth: 1, borderColor: "rgba(255,255,255,0.15)", position: "relative" },
-  roleBadge: { position: "absolute", top: 12, left: 12, backgroundColor: "rgba(34, 197, 94, 0.2)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
+  roleBadge: { position: "absolute", top: 12, left: 12, backgroundColor: "rgba(34,197,94,0.2)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
   roleBadgeText: { color: "#22C55E", fontSize: 10, fontFamily: "Inter_600SemiBold" },
   roleIconBig: { width: 68, height: 68, borderRadius: 34, alignItems: "center", justifyContent: "center", marginBottom: 16, alignSelf: "flex-end" },
   roleCardTitle: { fontSize: 22, fontFamily: "Inter_700Bold", color: "#fff", marginBottom: 8, textAlign: "right" },
   roleCardDesc: { fontSize: 14, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.7)", lineHeight: 22, textAlign: "right", marginBottom: 16 },
   roleArrow: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", alignSelf: "flex-start" },
-  
   authContainer: { flex: 1 },
   authHeader: { paddingHorizontal: 20, paddingBottom: 24 },
   authHeaderContent: { alignItems: "flex-end" },
+  authTitle: { fontSize: 26, fontFamily: "Inter_700Bold", color: "#fff" },
+  authSubtitle: { fontSize: 13, color: "rgba(255,255,255,0.7)", textAlign: "right", marginTop: 6, lineHeight: 20 },
   roleTag: { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20, gap: 5, marginBottom: 10 },
   roleTagText: { color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  authTitle: { fontSize: 26, fontFamily: "Inter_700Bold", color: "#fff" },
   authForm: { flex: 1 },
   authFormContent: { padding: 20, gap: 16 },
   authToggle: { flexDirection: "row", backgroundColor: "#E8EDF5", borderRadius: 12, padding: 4, marginBottom: 4 },
@@ -683,23 +770,29 @@ const styles = StyleSheet.create({
   errorText: { color: "#DC2626", fontSize: 13, fontFamily: "Inter_500Medium", flex: 1, textAlign: "right" },
   field: { gap: 6 },
   label: { fontSize: 13, fontFamily: "Inter_500Medium", textAlign: "right" },
+  fieldError: { color: "#EF4444", fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 4, textAlign: "right" },
   input: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, fontFamily: "Inter_400Regular" },
-  
-  phoneInputContainer: { flexDirection: "row-reverse", alignItems: "center", gap: 8 },
+  phoneInputContainer: { flexDirection: "row-reverse" as any, alignItems: "center", gap: 8 },
   phoneInput: { flex: 1 },
   phonePrefix: { backgroundColor: "#F1F5F9", paddingHorizontal: 12, paddingVertical: 13, borderRadius: 12, borderWidth: 1, borderColor: "#E2E8F0" },
   phonePrefixText: { fontSize: 15, fontFamily: "Inter_600SemiBold", color: "#64748B" },
-
   dropdownTrigger: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   dropdownValue: { fontSize: 15, fontFamily: "Inter_400Regular", flex: 1, textAlign: "right" },
   dropdownList: { borderRadius: 12, borderWidth: 1, marginTop: 4, overflow: "hidden" },
   dropdownItem: { padding: 12, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" },
   dropdownItemText: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "right" },
-
-  colorPicker: { flexDirection: "row-reverse", gap: 12, marginTop: 4 },
-  colorCircle: { width: 32, height: 32, borderRadius: 16 },
-
-  authBtn: { borderRadius: 14, paddingVertical: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, marginTop: 8 },
+  colorPicker: { flexDirection: "row-reverse" as any, gap: 12, marginTop: 4 },
+  colorCircle: { width: 36, height: 36, borderRadius: 18 },
+  authBtn: { borderRadius: 16, paddingVertical: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
   authBtnText: { color: "#fff", fontSize: 16, fontFamily: "Inter_700Bold" },
+  otpIllustration: { alignItems: "center", gap: 12, paddingVertical: 8 },
+  otpIconCircle: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center" },
+  otpHint: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 22 },
+  otpRow: { flexDirection: "row", justifyContent: "center", gap: 10 },
+  otpInput: { width: 46, height: 58, borderRadius: 14, fontSize: 24, fontFamily: "Inter_700Bold" },
+  resendRow: { alignItems: "center", marginTop: 4 },
+  resendHint: { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center" },
+  resendBtn: { fontSize: 14, fontFamily: "Inter_600SemiBold", textAlign: "center", paddingVertical: 8 },
+  whatsappNote: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 10, borderWidth: 1 },
+  whatsappNoteText: { fontSize: 12, fontFamily: "Inter_400Regular", flex: 1, textAlign: "right" },
 });
-
