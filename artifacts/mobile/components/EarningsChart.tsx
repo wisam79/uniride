@@ -23,7 +23,7 @@ export function EarningsChart({ data, maxAmount }: EarningsChartProps) {
 
   const [selectedBar, setSelectedBar] = useState<number | null>(null);
   const tooltipAnim = useRef(new Animated.Value(0)).current;
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const max = maxAmount ?? Math.max(...data.map((d) => d.amount), 1);
   const hasData = data.some((d) => d.amount > 0);
@@ -54,6 +54,7 @@ export function EarningsChart({ data, maxAmount }: EarningsChartProps) {
     }).start();
 
     timeoutRef.current = setTimeout(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       Animated.timing(tooltipAnim, {
         toValue: 0,
         duration: 300,
@@ -261,7 +262,6 @@ const styles = StyleSheet.create({
   tooltipText: {
     fontSize: 10,
     fontFamily: "Inter_600SemiBold",
-    whiteSpace: "nowrap",
   },
   footerStats: {
     flexDirection: "row",

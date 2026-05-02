@@ -88,7 +88,7 @@ export default function ActivateCardScreen() {
   const validateCode = async (code: string) => {
     setValidation("validating");
     try {
-      const data = await api.get(`/cards/validate/${code.replace(/-/g, "")}`);
+      const data = await api.get<{ plan: string; planName: string; durationMonths: number; driverId?: string }>(`/cards/validate/${code.replace(/-/g, "")}`);
       setValidInfo(data);
       setValidation("valid");
       if (data.driverId) setSelectedDriver(data.driverId);
@@ -108,7 +108,7 @@ export default function ActivateCardScreen() {
 
     setActivating(true);
     try {
-      const data = await api.post("/cards/activate", {
+      const data = await api.post<{ plan: string; driverName: string }>("/cards/activate", {
         code: fullCode,
         driverId: selectedDriver ?? validInfo?.driverId,
       });
@@ -384,7 +384,7 @@ const styles = StyleSheet.create({
   driverSub: { fontSize: 12, marginTop: 2, textAlign: "right" },
   howSection: { backgroundColor: "transparent" },
   howTitle: { fontSize: 15, fontFamily: "Inter_700Bold", textAlign: "right", marginBottom: 12 },
-  howRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10, flexDirection: "row-reverse" as any },
+  howRow: { flexDirection: "row-reverse" as any, alignItems: "center", gap: 12, marginBottom: 10 },
   howIcon: { width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   howText: { fontSize: 13, flex: 1, textAlign: "right" },
   footer: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 16, borderTopWidth: 1 },

@@ -96,6 +96,32 @@ export interface Driver {
   basicFare: number;
   standardFare: number;
   premiumFare: number;
+  gender?: "male" | "female" | null;
+  genderPreference?: "any" | "female" | "male";
+  seatsCapacity?: number;
+}
+
+export interface Route {
+  id: string;
+  driverId: string;
+  driverName: string;
+  driverPhone: string;
+  vehicleType?: string | null;
+  vehiclePlate?: string | null;
+  vehicleColor?: string | null;
+  fromArea: string;
+  fromCity: string;
+  toUniversity: string;
+  departureMorning: string;
+  departureEvening: string;
+  totalSeats: number;
+  availableSeats: number;
+  monthlyFare: string;
+  genderPreference: "any" | "female" | "male";
+  rating: string;
+  totalStudents: number;
+  notes?: string | null;
+  isActive: boolean;
 }
 
 export interface AppNotification { id: string; message: string; type: "success" | "error" | "info" | "warning" }
@@ -107,6 +133,7 @@ interface AppContextValue {
   subscription: Subscription | null;
   tripHistory: Trip[];
   availableDrivers: Driver[];
+  availableRoutes: Route[];
   todayEarnings: number;
   weeklyEarnings: number;
   pendingRequest: Trip | null;
@@ -133,9 +160,16 @@ interface AppContextValue {
   updateTripStatus: (tripId: string, status: TripStatus) => Promise<void>;
   toggleDriverOnline: () => Promise<void>;
   subscribeToPlan: (driverId: string, plan: SubscriptionPlan) => Promise<void>;
+  bookRoute: (routeId: string) => Promise<void>;
+  notifyAbsence: (driverId: string, reason?: string) => Promise<void>;
   rateDriver: (tripId: string, rating: number, comment?: string) => Promise<void>;
   refreshDrivers: () => Promise<void>;
+  refreshRoutes: () => Promise<void>;
   refreshHistory: () => Promise<void>;
+  myDriverRoutes: Route[];
+  createRoute: (data: Omit<Route, "id" | "driverId" | "driverName" | "driverPhone" | "vehicleType" | "vehiclePlate" | "vehicleColor" | "rating" | "totalStudents" | "isActive">) => Promise<Route>;
+  updateRoute: (routeId: string, data: Partial<Route>) => Promise<void>;
+  deleteRoute: (routeId: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -155,6 +189,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [subscription, setSubscriptionState] = useState<Subscription | null>(null);
   const [tripHistory, setTripHistory] = useState<Trip[]>([]);
   const [availableDrivers, setAvailableDrivers] = useState<Driver[]>([]);
+  const [availableRoutes, setAvailableRoutes] = useState<Route[]>([]);
+  const [myDriverRoutes, setMyDriverRoutes] = useState<Route[]>([]);
   const [isDriverOnline, setIsDriverOnline] = useState(false);
   const [pendingRequest, setPendingRequest] = useState<Trip | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -222,6 +258,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         fetchSubscription(),
         fetchDrivers(),
         fetchHistory(),
+        fetchRoutes(),
       ]);
     } catch {
       await AsyncStorage.removeItem("token");
@@ -251,6 +288,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch { /* ignore */ }
   }
 
+  async function fetchRoutes() {
+    try {
+      const routes = await api.get<Route[]>("/routes");
+      setAvailableRoutes(routes);
+    } catch { /* ignore */ }
+  }
+
+  async function fetchMyDriverRoutes() {
+    try {
+      const routes = await api.get<Route[]>("/routes/my");
+      setMyDriverRoutes(routes);
+    } catch { /* ignore */ }
+  }
+
   async function fetchHistory() {
     try {
       const history = await api.get<Trip[]>("/trips/history");
@@ -263,7 +314,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setUser(userData);
     setIsAuthenticated(true);
     setIsDriverOnline(userData.isOnline);
-    await Promise.all([fetchActiveTrip(), fetchSubscription(), fetchDrivers(), fetchHistory()]);
+    await Promise.all([fetchActiveTrip(), fetchSubscription(), fetchDrivers(), fetchHistory(), fetchRoutes()]);
   }
 
   async function logout() {
@@ -413,9 +464,41 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  async function bookRoute(routeId: string) {
+    const result = await api.post<{ subscription: Subscription; route: Route }>(`/routes/${routeId}/book`, {});
+    setSubscriptionState(result.subscription);
+    await fetchRoutes();
+  }
+
+  async function notifyAbsence(driverId: string, reason?: string) {
+    const today = new Date().toISOString().split("T")[0];
+    await api.post("/absences", { driverId, date: today, reason });
+  }
+
+  async function createRoute(data: Omit<Route, "id" | "driverId" | "driverName" | "driverPhone" | "vehicleType" | "vehiclePlate" | "vehicleColor" | "rating" | "totalStudents" | "isActive">): Promise<Route> {
+    const route = await api.post<Route>("/routes", {
+      ...data,
+      monthlyFare: Number(data.monthlyFare),
+    });
+    await fetchMyDriverRoutes();
+    return route;
+  }
+
+  async function updateRoute(routeId: string, data: Partial<Route>) {
+    await api.patch<Route>(`/routes/${routeId}`, {
+      ...data,
+      monthlyFare: data.monthlyFare !== undefined ? Number(data.monthlyFare) : undefined,
+    });
+    await fetchMyDriverRoutes();
+  }
+
+  async function deleteRoute(routeId: string) {
+    await api.delete(`/routes/${routeId}`);
+    setMyDriverRoutes((prev) => prev.filter((r) => r.id !== routeId));
+  }
+
   async function rateDriver(tripId: string, rating: number, comment?: string): Promise<void> {
     await api.post('/ratings', { tripId, rating, comment });
-    // refresh history to update the trip
     await fetchHistory();
   }
 
@@ -431,8 +514,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setIsRefreshing(false);
   };
 
+  const fetchRoutesWithLoading = async () => {
+    setIsRefreshing(true);
+    await fetchRoutes();
+    setIsRefreshing(false);
+  };
+
   const refreshDrivers = useCallback(fetchDriversWithLoading, []);
   const refreshHistory = useCallback(fetchHistoryWithLoading, []);
+  const refreshRoutes = useCallback(fetchRoutesWithLoading, []);
 
   const todayEarnings = tripHistory
     .filter((t) => {
@@ -510,9 +600,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updateTripStatus,
         toggleDriverOnline,
         subscribeToPlan,
+        bookRoute,
+        notifyAbsence,
         rateDriver,
         refreshDrivers,
+        refreshRoutes,
         refreshHistory,
+        availableRoutes,
+        myDriverRoutes,
+        createRoute,
+        updateRoute,
+        deleteRoute,
       }}
     >
       {children}

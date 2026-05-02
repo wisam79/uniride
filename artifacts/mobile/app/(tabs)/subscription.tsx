@@ -379,7 +379,7 @@ export default function SubscriptionScreen() {
               key={plan.id}
               plan={plan}
               isActive={subscription?.plan === plan.id && subscription?.isActive}
-              availableDriversCount={availableDrivers.filter(d => d.role === "driver").length}
+
               onSelect={() => {
                 if (subscription?.driverId) {
                   subscribeToPlan(subscription.driverId, plan.id);

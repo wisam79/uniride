@@ -20,9 +20,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { DriverCard } from "@/components/DriverCard";
 import { TripStatusCard } from "@/components/TripStatusCard";
-import { EmptyState } from "@/components/EmptyState";
-import { Driver, SubscriptionPlan, TripLocation, useApp } from "@/context/AppContext";
+import EmptyState from "@/components/EmptyState";
+import { RouteCard } from "@/components/RouteCard";
+import { Driver, Route, SubscriptionPlan, TripLocation, useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
+import { IRAQI_UNIVERSITIES } from "@/lib/universities";
 
 export default function HomeScreen() {
   const colors = useColors();
@@ -30,6 +32,7 @@ export default function HomeScreen() {
   const {
     user,
     availableDrivers,
+    availableRoutes,
     activeTrip,
     subscription,
     isDriverOnline,
@@ -42,9 +45,15 @@ export default function HomeScreen() {
     acceptTrip,
     cancelTrip,
     subscribeToPlan,
+    bookRoute,
+    notifyAbsence,
+    refreshRoutes,
+    refreshDrivers,
+    estimateFare,
   } = useApp();
 
   const [showBookModal, setShowBookModal] = useState(false);
+  const [showRoutesModal, setShowRoutesModal] = useState(false);
   const [originText, setOriginText] = useState("");
   const [destText, setDestText] = useState("");
   const [fareEstimate, setFareEstimate] = useState<number | null>(null);
@@ -52,11 +61,12 @@ export default function HomeScreen() {
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
   const [greeting, setGreeting] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [routeUniversityFilter, setRouteUniversityFilter] = useState("");
+  const [sendingAbsence, setSendingAbsence] = useState(false);
+  const [bookingRouteId, setBookingRouteId] = useState<string | null>(null);
 
   const { useRouter } = require("expo-router");
   const router = useRouter();
-
-  const { estimateFare, refreshDrivers } = useApp();
 
   const shimmerAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -71,9 +81,68 @@ export default function HomeScreen() {
 
   async function onRefreshDrivers() {
     setRefreshing(true);
-    await refreshDrivers();
+    await Promise.all([refreshDrivers(), refreshRoutes()]);
     setRefreshing(false);
   }
+
+  async function handleNotifyAbsence() {
+    if (!subscription?.isActive || !subscription.driverId) {
+      Alert.alert("تنبيه", "يجب أن يكون لديك اشتراك نشط لإبلاغ عن غياب");
+      return;
+    }
+    Alert.alert(
+      "إبلاغ عن غياب",
+      "هل تريد إبلاغ سائقك بغيابك اليوم؟",
+      [
+        { text: "إلغاء", style: "cancel" },
+        {
+          text: "إبلاغ",
+          onPress: async () => {
+            setSendingAbsence(true);
+            try {
+              await notifyAbsence(subscription.driverId);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert("تم الإبلاغ", "تم إبلاغ سائقك بغيابك اليوم ✓");
+            } catch {
+              Alert.alert("خطأ", "تعذر إبلاغ السائق، حاول مرة أخرى");
+            } finally {
+              setSendingAbsence(false);
+            }
+          },
+        },
+      ]
+    );
+  }
+
+  async function handleBookRoute(route: Route) {
+    Alert.alert(
+      "حجز مقعد",
+      `هل تريد الاشتراك في خط ${route.fromArea} → ${route.toUniversity} مع الكابتن ${route.driverName}؟\nالأجرة الشهرية: ${Number(route.monthlyFare).toLocaleString("ar-IQ")} دينار`,
+      [
+        { text: "إلغاء", style: "cancel" },
+        {
+          text: "حجز",
+          onPress: async () => {
+            setBookingRouteId(route.id);
+            try {
+              await bookRoute(route.id);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert("تم الحجز ✓", "تم تفعيل اشتراكك بنجاح! سيتواصل معك السائق قريباً");
+            } catch (err: any) {
+              Alert.alert("خطأ", err?.response?.data?.error ?? "فشل الحجز، حاول مرة أخرى");
+            } finally {
+              setBookingRouteId(null);
+            }
+          },
+        },
+      ]
+    );
+  }
+
+  const filteredRoutes = availableRoutes.filter((r) => {
+    if (!routeUniversityFilter) return true;
+    return r.toUniversity.includes(routeUniversityFilter);
+  });
 
   async function handleEstimateFare() {
     setEstimating(true);
@@ -211,6 +280,8 @@ export default function HomeScreen() {
     { label: "الجامعة التكنولوجية", icon: "cpu" },
     { label: "كلية الطب", icon: "activity" },
   ];
+
+  const topUniversities = IRAQI_UNIVERSITIES.slice(0, 5).map(u => u.name);
 
   if (user?.role === "driver") {
     return (
@@ -377,7 +448,7 @@ export default function HomeScreen() {
                       key={s} 
                       name="star" 
                       size={14} 
-                      color={s <= Math.round(user.rating ?? 5) ? "#FFD700" : colors.border} 
+                      color={s <= Math.round(Number(user.rating) || 5) ? "#FFD700" : colors.border} 
                     />
                   ))}
                 </View>
@@ -536,61 +607,139 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
 
+        {subscription?.isActive && subscription.driverId && (
+          <TouchableOpacity
+            style={[styles.absenceBtn, { backgroundColor: sendingAbsence ? colors.muted : "#FEF3C7", borderColor: "#F59E0B" }]}
+            onPress={handleNotifyAbsence}
+            disabled={sendingAbsence}
+            activeOpacity={0.85}
+          >
+            <FeatherIcon name="bell-off" size={18} color="#D97706" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.absenceBtnTitle}>إبلاغ عن غياب اليوم</Text>
+              <Text style={styles.absenceBtnSub}>أبلغ الكابتن {subscription.driverName} بأنك لن تكون موجوداً</Text>
+            </View>
+            <FeatherIcon name="chevron-left" size={16} color="#D97706" />
+          </TouchableOpacity>
+        )}
+
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>خطوط الشهرية المتاحة</Text>
+            <TouchableOpacity
+              style={[styles.onlineCounter, { backgroundColor: colors.secondary }]}
+              onPress={onRefreshDrivers}
+            >
+              <FeatherIcon name="refresh-cw" size={12} color={colors.primary} />
+              <Text style={[styles.onlineCountText, { color: colors.primary }]}>
+                {availableRoutes.length} خط
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }} contentContainerStyle={{ gap: 8, paddingBottom: 4 }}>
+            <TouchableOpacity
+              style={[styles.uniFilterChip, { backgroundColor: !routeUniversityFilter ? colors.primary : colors.secondary }]}
+              onPress={() => setRouteUniversityFilter("")}
+            >
+              <Text style={[styles.uniFilterText, { color: !routeUniversityFilter ? "#fff" : colors.primary }]}>الكل</Text>
+            </TouchableOpacity>
+            {topUniversities.map((uni) => (
+              <TouchableOpacity
+                key={uni}
+                style={[styles.uniFilterChip, { backgroundColor: routeUniversityFilter === uni ? colors.primary : colors.secondary }]}
+                onPress={() => setRouteUniversityFilter(routeUniversityFilter === uni ? "" : uni)}
+              >
+                <Text style={[styles.uniFilterText, { color: routeUniversityFilter === uni ? "#fff" : colors.primary }]} numberOfLines={1}>{uni}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {filteredRoutes.length > 0 ? (
+            filteredRoutes.slice(0, 5).map((route) => (
+              <RouteCard
+                key={route.id}
+                route={route}
+                onBook={handleBookRoute}
+                isBooked={subscription?.isActive && subscription.driverId === route.driverId}
+              />
+            ))
+          ) : (
+            <EmptyState
+              icon="map"
+              title="لا توجد خطوط متاحة"
+              description={routeUniversityFilter ? `لا توجد خطوط لـ${routeUniversityFilter} حالياً` : "لم يُضف أي سائق خطاً بعد"}
+            />
+          )}
+          {filteredRoutes.length > 5 && (
+            <TouchableOpacity
+              style={[styles.showMoreBtn, { backgroundColor: colors.secondary }]}
+              onPress={() => setShowRoutesModal(true)}
+            >
+              <Text style={[styles.showMoreText, { color: colors.primary }]}>عرض جميع الخطوط ({filteredRoutes.length})</Text>
+              <FeatherIcon name="chevron-left" size={16} color={colors.primary} />
+            </TouchableOpacity>
+          )}
+        </View>
+
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>السائقون المتاحون</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <TouchableOpacity 
-                onPress={onRefreshDrivers} 
-                style={{ marginLeft: 10, padding: 5 }}
-                disabled={refreshing}
-              >
-                <FeatherIcon name="refresh-cw" size={16} color={colors.primary} />
-              </TouchableOpacity>
-              <View style={[styles.onlineCounter, { backgroundColor: colors.secondary }]}>
-                <View style={[styles.pulseDot, { backgroundColor: colors.success }]} />
-                <Text style={[styles.onlineCountText, { color: colors.primary }]}>
-                  {availableDrivers.filter((d) => d.isOnline).length} متاح الآن
-                </Text>
-              </View>
+            <View style={[styles.onlineCounter, { backgroundColor: colors.secondary }]}>
+              <View style={[styles.pulseDot, { backgroundColor: colors.success }]} />
+              <Text style={[styles.onlineCountText, { color: colors.primary }]}>
+                {availableDrivers.filter((d) => d.isOnline).length} متاح
+              </Text>
             </View>
           </View>
-          <ScrollView 
-            horizontal={false} 
-            scrollEnabled={false}
-          >
-            {availableDrivers.filter(d => d.isOnline).length > 0 ? (
-              availableDrivers.filter(d => d.isOnline).map((driver) => (
-                <TouchableOpacity 
-                  key={driver.id} 
-                  onPress={() => setSelectedDriverId(driver.id)}
-                  activeOpacity={0.9}
-                  style={selectedDriverId === driver.id ? { borderWidth: 2, borderColor: colors.accent, borderRadius: 16, marginBottom: 12, overflow: 'hidden' } : { marginBottom: 12 }}
-                >
-                  <DriverCard driver={driver} onSubscribe={handleSubscribe} />
-                  {selectedDriverId === driver.id && (
-                    <View style={{ padding: 8, alignItems: 'center', backgroundColor: colors.accent }}>
-                      <Text style={{ color: '#fff', fontWeight: 'bold' }}>تم الاختيار للرحلة</Text>
-                    </View>
-                  )}
-                  <TouchableOpacity 
-                    style={{ position: 'absolute', top: 12, right: 12, backgroundColor: colors.accent, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}
-                    onPress={() => setSelectedDriverId(driver.id)}
-                  >
-                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>اختر</Text>
-                  </TouchableOpacity>
-                </TouchableOpacity>
-              ))
-            ) : (
-              <EmptyState 
-                icon="users"
-                title="لا يوجد كباتن متاحون"
-                description="جميع الكباتن مشغولون حالياً، حاول مرة أخرى بعد قليل"
-              />
-            )}
-          </ScrollView>
+          {availableDrivers.filter(d => d.isOnline).length > 0 ? (
+            availableDrivers.filter(d => d.isOnline).map((driver) => (
+              <TouchableOpacity 
+                key={driver.id} 
+                onPress={() => setSelectedDriverId(driver.id)}
+                activeOpacity={0.9}
+                style={[{ marginBottom: 12 }, selectedDriverId === driver.id ? { borderWidth: 2, borderColor: colors.accent, borderRadius: 16, overflow: 'hidden' } : {}]}
+              >
+                <DriverCard driver={driver} onSubscribe={handleSubscribe} />
+                {selectedDriverId === driver.id && (
+                  <View style={{ padding: 8, alignItems: 'center', backgroundColor: colors.accent }}>
+                    <Text style={{ color: '#fff', fontWeight: 'bold' }}>تم الاختيار للرحلة</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))
+          ) : (
+            <EmptyState 
+              icon="users"
+              title="لا يوجد كباتن متاحون"
+              description="جميع الكباتن مشغولون حالياً"
+            />
+          )}
         </View>
       </ScrollView>
+
+      <Modal visible={showRoutesModal} animationType="slide" presentationStyle="pageSheet">
+        <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+          <View style={styles.modalDragHandle} />
+          <View style={[styles.modalHeader, { borderBottomWidth: 0 }]}>
+            <TouchableOpacity onPress={() => setShowRoutesModal(false)}>
+              <FeatherIcon name="x" size={24} color={colors.foreground} />
+            </TouchableOpacity>
+            <Text style={[styles.modalTitleLarge, { color: colors.foreground }]}>جميع الخطوط</Text>
+            <View style={{ width: 24 }} />
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+            {filteredRoutes.map((route) => (
+              <RouteCard
+                key={route.id}
+                route={route}
+                onBook={(r) => { setShowRoutesModal(false); handleBookRoute(r); }}
+                isBooked={subscription?.isActive && subscription.driverId === route.driverId}
+              />
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
 
       <Modal visible={showBookModal} animationType="slide" presentationStyle="pageSheet">
         <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
@@ -740,6 +889,14 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
   onlineCounter: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, gap: 6 },
   onlineCountText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  absenceBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, borderWidth: 1, marginBottom: 20 },
+  absenceBtnTitle: { fontSize: 14, fontFamily: 'Inter_700Bold', color: '#92400E' },
+  absenceBtnSub: { fontSize: 12, fontFamily: 'Inter_400Regular', color: '#B45309', marginTop: 2 },
+  uniFilterChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  uniFilterText: { fontSize: 12, fontFamily: 'Inter_600SemiBold' },
+  showMoreBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, borderRadius: 14, marginTop: 4 },
+  showMoreText: { fontSize: 14, fontFamily: 'Inter_600SemiBold' },
+  pulseDot: { width: 8, height: 8, borderRadius: 4 },
   bookRideBtnPremium: { borderRadius: 16, marginBottom: 24, overflow: "hidden", elevation: 8, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.2, shadowRadius: 12 },
   bookRideBtnInner: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 24, position: 'relative' },
   bookRideBtnTitle: { fontSize: 20, fontFamily: "Inter_700Bold", color: "#fff", marginBottom: 4 },
@@ -793,5 +950,6 @@ const styles = StyleSheet.create({
   fareIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   confirmBookBtnPremium: { borderRadius: 16, paddingVertical: 18, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12, marginTop: 10, elevation: 4 },
   confirmBookBtnTextLarge: { color: "#fff", fontSize: 17, fontFamily: "Inter_700Bold" },
-  pulseDot: { width: 8, height: 8, borderRadius: 4 },
+  estimateBtn: {},
+  confirmBookingBtn: {},
 });

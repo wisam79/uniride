@@ -19,6 +19,9 @@ export const usersTable = pgTable("users", {
   basicFare: integer("basic_fare").default(50000).notNull(),
   standardFare: integer("standard_fare").default(80000).notNull(),
   premiumFare: integer("premium_fare").default(120000).notNull(),
+  gender: text("gender", { enum: ["male", "female"] }),
+  genderPreference: text("gender_preference", { enum: ["any", "female", "male"] }).default("any").notNull(),
+  seatsCapacity: integer("seats_capacity").default(4).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

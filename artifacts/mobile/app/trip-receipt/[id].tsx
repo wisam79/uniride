@@ -98,7 +98,7 @@ export default function TripReceiptScreen() {
             <View style={styles.infoRow}>
               <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>التقييم</Text>
               <Text style={[styles.infoValue, { color: "#FFD700" }]}>
-                {trip.driverRating ? "★".repeat(trip.driverRating) : "لم يتم التقييم"}
+                {trip.driverRating ? "★".repeat(Number(trip.driverRating)) : "لم يتم التقييم"}
               </Text>
             </View>
           </View>

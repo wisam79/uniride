@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { UserRole, useApp } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
 import { api } from "@/lib/api";
+import { IRAQI_UNIVERSITIES } from "@/lib/universities";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -30,13 +31,7 @@ const TESTIMONIALS = [
   { name: "سارة", role: "طالبة", quote: "أشعر بالأمان التام في كل رحلة" },
 ];
 
-const UNIVERSITIES = [
-  "جامعة بغداد", "الجامعة التكنولوجية", "جامعة المستنصرية", "جامعة النهرين",
-  "الجامعة الإسلامية", "جامعة الكوفة", "جامعة البصرة", "جامعة الموصل",
-  "جامعة كربلاء", "جامعة ذي قار", "جامعة ميسان", "جامعة واسط",
-  "جامعة القادسية", "جامعة تكريت", "جامعة الأنبار", "جامعة كركوك",
-  "جامعة ديالى", "كلية الطب / بغداد", "المعهد التقني بغداد",
-];
+const UNIVERSITIES = IRAQI_UNIVERSITIES.map((u) => u.name);
 
 type Screen = "welcome" | "role" | "auth" | "otp";
 type AuthMode = "login" | "register";

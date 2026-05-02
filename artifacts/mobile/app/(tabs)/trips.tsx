@@ -185,7 +185,7 @@ function TripHistoryItem({ trip, role }: { trip: Trip; role: "student" | "driver
           driverName={trip.driverName ?? ""}
           visible={showRating}
           onClose={() => setShowRating(false)}
-          onSuccess={() => {
+          onSubmitted={() => {
             setShowRating(false);
             refreshHistory();
           }}
