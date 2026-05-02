@@ -574,7 +574,7 @@ export default function HomeScreen() {
                     </View>
                   )}
                   <TouchableOpacity 
-                    style={{ position: 'absolute', top: 12, left: 12, backgroundColor: colors.accent, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}
+                    style={{ position: 'absolute', top: 12, right: 12, backgroundColor: colors.accent, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}
                     onPress={() => setSelectedDriverId(driver.id)}
                   >
                     <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>اختر</Text>

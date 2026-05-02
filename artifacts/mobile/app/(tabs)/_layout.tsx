@@ -84,7 +84,7 @@ function ClassicTabLayout({ role, isAdmin }: { role: "student" | "driver"; isAdm
           backgroundColor: isIOS
             ? "transparent"
             : isAndroid
-              ? `${colors.card}F7` // 0.97 opacity
+              ? `${colors.card}F7`
               : colors.card,
           borderTopWidth: isWeb ? 1 : 0,
           borderTopColor: colors.border,
@@ -94,6 +94,7 @@ function ClassicTabLayout({ role, isAdmin }: { role: "student" | "driver"; isAdm
           shadowOffset: { width: 0, height: -2 },
           shadowOpacity: 0.08,
           shadowRadius: 12,
+          ...(isWeb ? { flexDirection: "row-reverse" as any } : {}),
         },
         tabBarBackground: () =>
           isIOS ? (
