@@ -1,43 +1,53 @@
 import { logger } from "./logger";
 
-const WHATSAPP_TOKEN = process.env["WHATSAPP_TOKEN"];
-const WHATSAPP_PHONE_ID = process.env["WHATSAPP_PHONE_ID"];
-
 export async function sendWhatsAppOtp(phone: string, code: string): Promise<void> {
+  const token = process.env["WHATSAPP_TOKEN"];
+  const phoneId = process.env["WHATSAPP_PHONE_ID"];
   const iraqPhone = normalizeIraqPhone(phone);
 
-  if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_ID) {
-    logger.warn({ phone: iraqPhone }, `[DEV] OTP code: ${code} — WhatsApp not configured`);
+  if (!token || !phoneId) {
+    logger.warn({ phone: iraqPhone }, `[DEV MODE] OTP = ${code} — أضف WHATSAPP_TOKEN و WHATSAPP_PHONE_ID لتفعيل الإرسال الفعلي`);
     return;
   }
 
-  const url = `https://graph.facebook.com/v19.0/${WHATSAPP_PHONE_ID}/messages`;
+  const url = `https://graph.facebook.com/v19.0/${phoneId}/messages`;
 
   const body = {
     messaging_product: "whatsapp",
     to: iraqPhone,
     type: "text",
     text: {
-      body: `🔐 رمز التحقق من يونيرايد:\n\n*${code}*\n\nصالح لمدة 5 دقائق فقط.\nلا تشاركه مع أحد.`,
+      body: `🎓 *يونيرايد العراق*\n\nرمز التحقق الخاص بك:\n\n*${code}*\n\n⏱ صالح لمدة 5 دقائق فقط\n🔒 لا تشاركه مع أحد`,
     },
   };
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${WHATSAPP_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
 
-  if (!res.ok) {
-    const err = await res.text();
-    logger.error({ phone: iraqPhone, status: res.status, err }, "WhatsApp send failed");
-    throw new Error("فشل إرسال رمز التحقق عبر واتساب");
+    if (!res.ok) {
+      const errText = await res.text();
+      logger.error({ phone: iraqPhone, status: res.status, errText }, "WhatsApp send failed");
+
+      if (res.status === 401) throw new Error("رمز واتساب غير صالح — تحقق من WHATSAPP_TOKEN");
+      if (res.status === 400) throw new Error("رقم الهاتف غير مسجل في واتساب أو صيغته خاطئة");
+      throw new Error("فشل إرسال رمز التحقق عبر واتساب");
+    }
+
+    logger.info({ phone: iraqPhone }, "WhatsApp OTP sent successfully");
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message.startsWith("فشل") || err instanceof Error && err.message.startsWith("رمز") || err instanceof Error && err.message.startsWith("رقم")) {
+      throw err;
+    }
+    logger.error({ phone: iraqPhone, err }, "WhatsApp network error");
+    throw new Error("تعذّر الاتصال بخدمة واتساب، حاول مجدداً");
   }
-
-  logger.info({ phone: iraqPhone }, "WhatsApp OTP sent");
 }
 
 function normalizeIraqPhone(phone: string): string {
