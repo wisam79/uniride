@@ -1,7 +1,8 @@
 import FeatherIcon from "@/components/FeatherIcon";
+import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
-import React from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { Animated, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { SubscriptionPlan } from "@/context/AppContext";
 import { useColors } from "@/hooks/useColors";
@@ -23,11 +24,37 @@ interface SubscriptionCardProps {
 
 export function SubscriptionCard({ plan, isActive, onSelect }: SubscriptionCardProps) {
   const colors = useColors();
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(opacityAnim, {
+      toValue: 1,
+      duration: 500,
+      useNativeDriver: true,
+    }).start();
+  }, []);
 
   function handlePress() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     onSelect();
   }
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 0.98,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const isPremium = plan.id === "premium";
 
   const bgColor = isActive
     ? colors.primary
@@ -35,23 +62,12 @@ export function SubscriptionCard({ plan, isActive, onSelect }: SubscriptionCardP
     ? colors.primary + "10"
     : colors.card;
 
-  const textColor = isActive ? colors.primaryForeground : colors.foreground;
-  const subTextColor = isActive ? "rgba(255,255,255,0.7)" : colors.mutedForeground;
-  const accentColor = isActive ? "#FF9E7A" : colors.accent;
+  const textColor = isActive || (isPremium && !isActive) ? "#FFFFFF" : colors.foreground;
+  const subTextColor = isActive || (isPremium && !isActive) ? "rgba(255,255,255,0.7)" : colors.mutedForeground;
+  const accentColor = isActive || (isPremium && !isActive) ? "#FF9E7A" : colors.accent;
 
-  return (
-    <TouchableOpacity
-      style={[
-        styles.card,
-        {
-          backgroundColor: bgColor,
-          borderColor: isActive ? colors.primary : plan.isPopular ? colors.primary + "40" : colors.border,
-          borderWidth: isActive || plan.isPopular ? 2 : 1,
-        },
-      ]}
-      onPress={handlePress}
-      activeOpacity={0.85}
-    >
+  const CardContent = (
+    <>
       {plan.isPopular && !isActive && (
         <View style={[styles.popularBadge, { backgroundColor: colors.accent }]}>
           <Text style={styles.popularText}>الأكثر طلباً</Text>
@@ -67,7 +83,7 @@ export function SubscriptionCard({ plan, isActive, onSelect }: SubscriptionCardP
       <Text style={[styles.planName, { color: textColor }]}>{plan.nameAr}</Text>
 
       <View style={styles.priceRow}>
-        <Text style={[styles.price, { color: isActive ? "#fff" : colors.accent }]}>
+        <Text style={[styles.price, { color: isActive || isPremium ? "#fff" : colors.accent }]}>
           {(plan.monthlyFare / 1000).toFixed(0)}k
         </Text>
         <View>
@@ -76,7 +92,7 @@ export function SubscriptionCard({ plan, isActive, onSelect }: SubscriptionCardP
         </View>
       </View>
 
-      <View style={[styles.divider, { backgroundColor: isActive ? "rgba(255,255,255,0.2)" : colors.border }]} />
+      <View style={[styles.divider, { backgroundColor: isActive || isPremium ? "rgba(255,255,255,0.2)" : colors.border }]} />
 
       <Text style={[styles.tripsText, { color: accentColor }]}>
         {plan.tripsPerMonth === "unlimited" ? "رحلات غير محدودة" : `${plan.tripsPerMonth} رحلة / شهر`}
@@ -92,11 +108,40 @@ export function SubscriptionCard({ plan, isActive, onSelect }: SubscriptionCardP
       </View>
 
       {!isActive && (
-        <View style={[styles.selectBtn, { backgroundColor: isActive ? colors.success : colors.primary }]}>
+        <View style={[styles.selectBtn, { backgroundColor: isPremium ? "rgba(255,255,255,0.2)" : colors.primary, borderWidth: isPremium ? 1 : 0, borderColor: "rgba(255,255,255,0.4)" }]}>
           <Text style={styles.selectBtnText}>اشترك الآن</Text>
         </View>
       )}
-    </TouchableOpacity>
+    </>
+  );
+
+  return (
+    <Animated.View style={{ opacity: opacityAnim, transform: [{ scale: scaleAnim }] }}>
+      <TouchableOpacity
+        style={[
+          styles.card,
+          !isPremium && {
+            backgroundColor: bgColor,
+            borderColor: isActive ? colors.primary : plan.isPopular ? colors.primary + "40" : colors.border,
+            borderWidth: isActive || plan.isPopular ? 2 : 1,
+          },
+        ]}
+        onPress={handlePress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={0.9}
+      >
+        {isPremium && !isActive ? (
+          <LinearGradient
+            colors={["#1A3C6E", "#2A5CA8", "#3B7BC8"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[StyleSheet.absoluteFill, { borderRadius: 16 }]}
+          />
+        ) : null}
+        {CardContent}
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 

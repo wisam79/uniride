@@ -34,11 +34,13 @@ function NativeTabLayout({ role }: { role: "student" | "driver" }) {
 }
 
 function ClassicTabLayout({ role }: { role: "student" | "driver" }) {
+  const { pendingRequest } = useApp();
   const colors = useColors();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
+  const isAndroid = Platform.OS === "android";
 
   return (
     <Tabs
@@ -48,11 +50,19 @@ function ClassicTabLayout({ role }: { role: "student" | "driver" }) {
         headerShown: false,
         tabBarStyle: {
           position: "absolute",
-          backgroundColor: isIOS ? "transparent" : colors.card,
+          backgroundColor: isIOS
+            ? "transparent"
+            : isAndroid
+              ? `${colors.card}F7` // 0.97 opacity
+              : colors.card,
           borderTopWidth: isWeb ? 1 : 0,
           borderTopColor: colors.border,
-          elevation: 0,
-          height: isWeb ? 84 : undefined,
+          elevation: 4,
+          height: isWeb ? 84 : 64,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: 0.08,
+          shadowRadius: 12,
         },
         tabBarBackground: () =>
           isIOS ? (
@@ -66,7 +76,8 @@ function ClassicTabLayout({ role }: { role: "student" | "driver" }) {
           ) : null,
         tabBarLabelStyle: {
           fontFamily: "Inter_500Medium",
-          fontSize: 11,
+          fontSize: 12,
+          letterSpacing: -0.2,
         },
       }}
     >
@@ -74,48 +85,82 @@ function ClassicTabLayout({ role }: { role: "student" | "driver" }) {
         name="index"
         options={{
           title: "الرئيسية",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="house.fill" tintColor={color} size={22} />
+          tabBarIcon: ({ color, focused }) => {
+            const size = focused ? 24 : 22;
+            const icon = isIOS ? (
+              <SymbolView name="house.fill" tintColor={color} size={size} />
             ) : (
-              <FeatherIcon name="home" size={22} color={color} />
-            ),
+              <FeatherIcon name="home" size={size} color={color} />
+            );
+
+            if (role === "driver" && pendingRequest) {
+              return (
+                <View>
+                  {icon}
+                  <View
+                    style={{
+                      position: "absolute",
+                      right: -2,
+                      top: -2,
+                      backgroundColor: "#EF4444",
+                      width: 10,
+                      height: 10,
+                      borderRadius: 5,
+                      borderWidth: 1.5,
+                      borderColor: colors.card,
+                    }}
+                  />
+                </View>
+              );
+            }
+            return icon;
+          },
         }}
       />
       <Tabs.Screen
         name="trips"
         options={{
           title: role === "student" ? "رحلاتي" : "الرحلات",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="car.fill" tintColor={color} size={22} />
+          tabBarIcon: ({ color, focused }) => {
+            const size = focused ? 24 : 22;
+            return isIOS ? (
+              <SymbolView name="car.fill" tintColor={color} size={size} />
             ) : (
-              <FeatherIcon name="map" size={22} color={color} />
-            ),
+              <FeatherIcon name="map" size={size} color={color} />
+            );
+          },
         }}
       />
       <Tabs.Screen
         name="subscription"
         options={{
           title: role === "student" ? "اشتراكي" : "الأرباح",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="creditcard.fill" tintColor={color} size={22} />
+          tabBarIcon: ({ color, focused }) => {
+            const size = focused ? 24 : 22;
+            return isIOS ? (
+              <SymbolView name="creditcard.fill" tintColor={color} size={size} />
             ) : (
-              <FeatherIcon name={role === "student" ? "credit-card" : "dollar-sign"} size={22} color={color} />
-            ),
+              <FeatherIcon
+                name={role === "student" ? "credit-card" : "dollar-sign"}
+                size={size}
+                color={color}
+              />
+            );
+          },
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: "الملف",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="person.fill" tintColor={color} size={22} />
+          tabBarIcon: ({ color, focused }) => {
+            const size = focused ? 24 : 22;
+            return isIOS ? (
+              <SymbolView name="person.fill" tintColor={color} size={size} />
             ) : (
-              <FeatherIcon name="user" size={22} color={color} />
-            ),
+              <FeatherIcon name="user" size={size} color={color} />
+            );
+          },
         }}
       />
     </Tabs>

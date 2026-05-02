@@ -109,6 +109,10 @@ interface AppContextValue {
   pendingRequest: Trip | null;
   isDriverOnline: boolean;
   isLoading: boolean;
+  isRefreshing: boolean;
+  pollError: boolean;
+  weeklyEarningsData: { day: string; amount: number }[];
+  monthlyEarnings: number;
   login: (userData: User, token: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => Promise<void>;
@@ -121,6 +125,7 @@ interface AppContextValue {
   updateTripStatus: (tripId: string, status: TripStatus) => Promise<void>;
   toggleDriverOnline: () => Promise<void>;
   subscribeToPlan: (driverId: string, plan: SubscriptionPlan) => Promise<void>;
+  rateDriver: (tripId: string, rating: number, comment?: string) => Promise<void>;
   refreshDrivers: () => Promise<void>;
   refreshHistory: () => Promise<void>;
 }
@@ -145,6 +150,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isDriverOnline, setIsDriverOnline] = useState(false);
   const [pendingRequest, setPendingRequest] = useState<Trip | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [pollError, setPollError] = useState(false);
+  const pollErrorCount = useRef(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const userRef = useRef<User | null>(null);
   userRef.current = user;
@@ -173,15 +181,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   async function pollData() {
     try {
       const [tripData, pendingData] = await Promise.all([
-        api.get<Trip | null>("/trips/active").catch(() => null),
-        userRef.current?.role === "driver" ? api.get<Trip | null>("/trips/pending").catch(() => null) : Promise.resolve(null),
+        api.get<Trip | null>("/trips/active").catch((err) => { throw err; }),
+        userRef.current?.role === "driver" ? api.get<Trip | null>("/trips/pending").catch((err) => { throw err; }) : Promise.resolve(null),
       ]);
       if (tripData) setActiveTripState(tripWithAliases(tripData));
       else setActiveTripState(null);
       if (pendingData) setPendingRequest(tripWithAliases(pendingData));
       else setPendingRequest(null);
+      
+      pollErrorCount.current = 0;
+      setPollError(false);
     } catch {
-      // silent
+      pollErrorCount.current += 1;
+      if (pollErrorCount.current >= 3) {
+        setPollError(true);
+      }
     }
   }
 
@@ -346,8 +360,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const refreshDrivers = useCallback(fetchDrivers, []);
-  const refreshHistory = useCallback(fetchHistory, []);
+  async function rateDriver(tripId: string, rating: number, comment?: string): Promise<void> {
+    await api.post('/ratings', { tripId, rating, comment });
+    // refresh history to update the trip
+    await fetchHistory();
+  }
+
+  const fetchDriversWithLoading = async () => {
+    setIsRefreshing(true);
+    await fetchDrivers();
+    setIsRefreshing(false);
+  };
+
+  const fetchHistoryWithLoading = async () => {
+    setIsRefreshing(true);
+    await fetchHistory();
+    setIsRefreshing(false);
+  };
+
+  const refreshDrivers = useCallback(fetchDriversWithLoading, []);
+  const refreshHistory = useCallback(fetchHistoryWithLoading, []);
 
   const todayEarnings = tripHistory
     .filter((t) => {
@@ -368,6 +400,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     })
     .reduce((sum, t) => sum + Number(t.driverShare ?? 0), 0);
 
+  const weeklyEarningsData = Array.from({ length: 7 }, (_, i) => {
+    const date = new Date();
+    date.setDate(date.getDate() - (6 - i));
+    const dayEarnings = tripHistory
+      .filter(t => {
+        const td = new Date(t.startTime);
+        return t.status === 'completed' &&
+          td.getDate() === date.getDate() &&
+          td.getMonth() === date.getMonth();
+      })
+      .reduce((sum, t) => sum + Number(t.driverShare ?? 0), 0);
+    const days = ['أحد', 'اثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت'];
+    return { day: days[date.getDay()], amount: dayEarnings };
+  });
+
+  const monthlyEarnings = tripHistory
+    .filter(t => {
+      const monthAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      return t.status === 'completed' && new Date(t.startTime).getTime() > monthAgo;
+    })
+    .reduce((sum, t) => sum + Number(t.driverShare ?? 0), 0);
+
   return (
     <AppContext.Provider
       value={{
@@ -379,9 +433,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         availableDrivers,
         todayEarnings,
         weeklyEarnings,
+        weeklyEarningsData,
+        monthlyEarnings,
         pendingRequest,
         isDriverOnline,
         isLoading,
+        isRefreshing,
+        pollError,
         login,
         logout,
         updateUser,
@@ -394,6 +452,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updateTripStatus,
         toggleDriverOnline,
         subscribeToPlan,
+        rateDriver,
         refreshDrivers,
         refreshHistory,
       }}

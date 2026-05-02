@@ -14,6 +14,8 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Share,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -25,11 +27,14 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { user, logout, updateUser, tripHistory } = useApp();
   const [editModal, setEditModal] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [editName, setEditName] = useState(user?.name ?? "");
   const [editPhone, setEditPhone] = useState(user?.phone ?? "");
   const [editUniversity, setEditUniversity] = useState(user?.university ?? "");
   const [editVehicle, setEditVehicle] = useState(user?.vehicleType ?? "");
   const [editPlate, setEditPlate] = useState(user?.vehiclePlate ?? "");
+  const [editVehicleColor, setEditVehicleColor] = useState(user?.vehicleColor ?? "");
+  const [editFareBasic, setEditFareBasic] = useState(user?.fareBasic?.toString() ?? "5000");
   const [notifications, setNotifications] = useState(true);
   const [locationShare, setLocationShare] = useState(true);
 
@@ -40,15 +45,24 @@ export default function ProfileScreen() {
   const completedTrips = tripHistory.filter((t) => t.status === "completed").length;
 
   async function handleSave() {
-    await updateUser({
-      name: editName.trim() || user?.name,
-      phone: editPhone.trim() || user?.phone,
-      university: role === "student" ? editUniversity.trim() || user?.university : user?.university,
-      vehicleType: role === "driver" ? editVehicle.trim() || user?.vehicleType : user?.vehicleType,
-      vehiclePlate: role === "driver" ? editPlate.trim() || user?.vehiclePlate : user?.vehiclePlate,
-    });
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setEditModal(false);
+    setIsSaving(true);
+    try {
+      await updateUser({
+        name: editName.trim() || user?.name,
+        phone: editPhone.trim() || user?.phone,
+        university: role === "student" ? editUniversity.trim() || user?.university : user?.university,
+        vehicleType: role === "driver" ? editVehicle.trim() || user?.vehicleType : user?.vehicleType,
+        vehiclePlate: role === "driver" ? editPlate.trim() || user?.vehiclePlate : user?.vehiclePlate,
+        vehicleColor: role === "driver" ? editVehicleColor.trim() || user?.vehicleColor : undefined,
+        fareBasic: role === "driver" ? parseInt(editFareBasic) || user?.fareBasic : undefined,
+      } as any);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setEditModal(false);
+    } catch (error) {
+      Alert.alert("خطأ", "حدث خطأ أثناء حفظ البيانات");
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   async function handleLogout() {
@@ -69,6 +83,24 @@ export default function ProfileScreen() {
       ]
     );
   }
+
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: 'انضم إلي في يونيرايد! تطبيق التوصيل الأول للطلاب في العراق.',
+      });
+    } catch (error) {
+      // console.error(error);
+    }
+  };
+
+  const handleSupport = () => {
+    Alert.alert("الدعم الفني", "يمكنك التواصل معنا عبر الرقم التالي:\n07901234567");
+  };
+
+  const handleRate = () => {
+    Alert.alert("تقييم التطبيق", "شكراً لك! تقييمك يهمنا");
+  };
 
   function MenuItem({
     icon,
@@ -126,8 +158,10 @@ export default function ProfileScreen() {
         style={[styles.header, { paddingTop: topPad + 16 }]}
       >
         <View style={styles.avatarArea}>
-          <View style={[styles.avatar, { backgroundColor: role === "student" ? "#FF6B35" : "#5B8DEF" }]}>
-            <Text style={styles.avatarText}>{user?.name.charAt(0)}</Text>
+          <View style={[styles.avatar, { borderColor: role === "student" ? colors.accent : colors.primary, borderWidth: 4 }]}>
+            <View style={[styles.avatarInner, { backgroundColor: role === "student" ? "#FF6B35" : "#5B8DEF" }]}>
+              <Text style={styles.avatarText}>{user?.name.substring(0, 2)}</Text>
+            </View>
           </View>
           <TouchableOpacity
             style={[styles.editAvatarBtn, { backgroundColor: "rgba(255,255,255,0.2)" }]}
@@ -137,9 +171,43 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
         <Text style={styles.userName}>{user?.name}</Text>
-        <View style={styles.roleChip}>
+        
+        <LinearGradient
+          colors={role === 'student' ? ['#FF6B35', '#FF8C5A'] : ['#1A3C6E', '#2A5CA8']}
+          style={styles.roleChip}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+        >
           <FeatherIcon name={role === "student" ? "book-open" : "truck"} size={12} color="#fff" />
           <Text style={styles.roleChipText}>{role === "student" ? "طالب جامعي" : "سائق"}</Text>
+        </LinearGradient>
+
+        <View style={styles.badgesRow}>
+          {role === 'student' ? (
+            <>
+              {completedTrips > 5 && (
+                <View style={[styles.badgeChip, { backgroundColor: 'rgba(255,255,255,0.1)' }]}>
+                  <Text style={styles.badgeText}>طالب نشط ⭐</Text>
+                </View>
+              )}
+              <View style={[styles.badgeChip, { backgroundColor: 'rgba(255,255,255,0.1)' }]}>
+                <Text style={styles.badgeText}>موثوق ✓</Text>
+              </View>
+            </>
+          ) : (
+            <>
+              {completedTrips > 10 && (
+                <View style={[styles.badgeChip, { backgroundColor: 'rgba(255,255,255,0.1)' }]}>
+                  <Text style={styles.badgeText}>سائق مميز 🏆</Text>
+                </View>
+              )}
+              {Number(user?.rating ?? 0) > 4.5 && (
+                <View style={[styles.badgeChip, { backgroundColor: 'rgba(255,255,255,0.1)' }]}>
+                  <Text style={styles.badgeText}>تقييم عالي ⭐</Text>
+                </View>
+              )}
+            </>
+          )}
         </View>
 
         <View style={styles.statsRow}>
@@ -156,6 +224,11 @@ export default function ProfileScreen() {
           <View style={styles.statItem}>
             <Text style={styles.statValue}>{role === "student" ? (user?.university?.split(" ")[1] ?? "—") : (user?.vehicleType?.split(" ")[0] ?? "—")}</Text>
             <Text style={styles.statLabel}>{role === "student" ? "الجامعة" : "السيارة"}</Text>
+          </View>
+          <View style={[styles.statDivider, { backgroundColor: "rgba(255,255,255,0.2)" }]} />
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>مايو</Text>
+            <Text style={styles.statLabel}>عضو منذ</Text>
           </View>
         </View>
       </LinearGradient>
@@ -176,7 +249,9 @@ export default function ProfileScreen() {
             {role === "driver" && (
               <>
                 <MenuItem icon="truck" label={user?.vehicleType ?? "—"} />
-                <MenuItem icon="hash" label={user?.vehiclePlate ?? "—"} isLast />
+                <MenuItem icon="hash" label={user?.vehiclePlate ?? "—"} />
+                {user?.vehicleColor && <MenuItem icon="palette" label={user.vehicleColor} />}
+                <MenuItem icon="dollar-sign" label={`السعر الأساسي: ${user.fareBasic ?? 5000} د.ع`} isLast />
               </>
             )}
           </View>
@@ -185,6 +260,11 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>الإعدادات</Text>
           <View style={[styles.menuCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <MenuItem
+              icon="globe"
+              label="اللغة"
+              value="العربية"
+            />
             <MenuItem
               icon="bell"
               label="الإشعارات"
@@ -204,6 +284,15 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>الدعم والمشاركة</Text>
+          <View style={[styles.menuCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <MenuItem icon="headphones" label="الدعم الفني" onPress={handleSupport} />
+            <MenuItem icon="share-2" label="شارك التطبيق" onPress={handleShare} />
+            <MenuItem icon="star" label="قيّم التطبيق" onPress={handleRate} isLast />
+          </View>
+        </View>
+
+        <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.mutedForeground }]}>عن التطبيق</Text>
           <View style={[styles.menuCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <MenuItem icon="info" label="يونيرايد" value="v1.0.0" />
@@ -218,9 +307,14 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <Text style={[styles.footer, { color: colors.mutedForeground }]}>
-          UniRide Iraq · ربط الطلاب بالسائقين
-        </Text>
+        <View style={styles.footerContainer}>
+          <Text style={[styles.footerText, { color: colors.mutedForeground }]}>
+            يونيرايد العراق · النسخة 1.0.0
+          </Text>
+          <Text style={[styles.footerSubtext, { color: colors.mutedForeground }]}>
+            تواصل معنا: uniride@example.com
+          </Text>
+        </View>
       </ScrollView>
 
       <Modal visible={editModal} animationType="slide" presentationStyle="pageSheet">
@@ -230,8 +324,12 @@ export default function ProfileScreen() {
               <FeatherIcon name="x" size={22} color={colors.foreground} />
             </TouchableOpacity>
             <Text style={[styles.modalTitle, { color: colors.foreground }]}>تعديل الملف</Text>
-            <TouchableOpacity onPress={handleSave}>
-              <Text style={[styles.saveBtn, { color: colors.primary }]}>حفظ</Text>
+            <TouchableOpacity onPress={handleSave} disabled={isSaving}>
+              {isSaving ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Text style={[styles.saveBtn, { color: colors.primary }]}>حفظ</Text>
+              )}
             </TouchableOpacity>
           </View>
           <ScrollView style={styles.modalContent} keyboardShouldPersistTaps="handled">
@@ -285,6 +383,26 @@ export default function ProfileScreen() {
                     textAlign="right"
                   />
                 </View>
+                <View style={styles.field}>
+                  <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>لون السيارة</Text>
+                  <TextInput
+                    style={[styles.fieldInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
+                    value={editVehicleColor}
+                    onChangeText={setEditVehicleColor}
+                    textAlign="right"
+                    placeholder="مثال: أبيض"
+                  />
+                </View>
+                <View style={styles.field}>
+                  <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>السعر الأساسي (دينار)</Text>
+                  <TextInput
+                    style={[styles.fieldInput, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
+                    value={editFareBasic}
+                    onChangeText={setEditFareBasic}
+                    keyboardType="numeric"
+                    textAlign="right"
+                  />
+                </View>
               </>
             )}
           </ScrollView>
@@ -298,33 +416,39 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   header: { paddingHorizontal: 20, paddingBottom: 24, alignItems: "center" },
   avatarArea: { position: "relative", marginBottom: 12 },
-  avatar: { width: 80, height: 80, borderRadius: 40, alignItems: "center", justifyContent: "center" },
-  avatarText: { fontSize: 32, fontFamily: "Inter_700Bold", color: "#fff" },
-  editAvatarBtn: { position: "absolute", bottom: 0, right: 0, width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
-  userName: { fontSize: 20, fontFamily: "Inter_700Bold", color: "#fff", marginBottom: 6 },
-  roleChip: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(255,255,255,0.15)", paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20, marginBottom: 20 },
-  roleChipText: { color: "#fff", fontSize: 12, fontFamily: "Inter_500Medium" },
+  avatar: { width: 96, height: 96, borderRadius: 48, padding: 4 },
+  avatarInner: { width: "100%", height: "100%", borderRadius: 44, alignItems: "center", justifyContent: "center" },
+  avatarText: { fontSize: 36, fontFamily: "Inter_700Bold", color: "#fff" },
+  editAvatarBtn: { position: "absolute", bottom: 0, right: 0, width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: '#1A3C6E' },
+  userName: { fontSize: 22, fontFamily: "Inter_700Bold", color: "#fff", marginBottom: 8 },
+  roleChip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20, marginBottom: 12 },
+  roleChipText: { color: "#fff", fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  badgesRow: { flexDirection: 'row', gap: 8, marginBottom: 20 },
+  badgeChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  badgeText: { color: '#fff', fontSize: 11, fontFamily: 'Inter_500Medium' },
   statsRow: { flexDirection: "row", width: "100%" },
   statItem: { flex: 1, alignItems: "center" },
-  statValue: { fontSize: 20, fontFamily: "Inter_700Bold", color: "#fff", marginBottom: 2 },
-  statLabel: { fontSize: 11, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.6)" },
-  statDivider: { width: 1 },
+  statValue: { fontSize: 18, fontFamily: "Inter_700Bold", color: "#fff", marginBottom: 2 },
+  statLabel: { fontSize: 10, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.6)" },
+  statDivider: { width: 1, height: '60%', alignSelf: 'center' },
   content: { flex: 1 },
-  section: { marginBottom: 20 },
-  sectionTitle: { fontSize: 12, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 8, marginLeft: 4 },
-  menuCard: { borderRadius: 14, borderWidth: 1, overflow: "hidden" },
-  menuItem: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, gap: 12 },
-  menuIcon: { width: 34, height: 34, borderRadius: 9, alignItems: "center", justifyContent: "center" },
-  menuLabel: { flex: 1, fontSize: 14, fontFamily: "Inter_500Medium" },
-  menuRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+  section: { marginBottom: 24 },
+  sectionTitle: { fontSize: 12, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 10, marginLeft: 4, textAlign: 'right', paddingRight: 4 },
+  menuCard: { borderRadius: 16, borderWidth: 1, overflow: "hidden" },
+  menuItem: { flexDirection: "row-reverse", alignItems: "center", paddingHorizontal: 16, paddingVertical: 14, gap: 12 },
+  menuIcon: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  menuLabel: { flex: 1, fontSize: 14, fontFamily: "Inter_500Medium", textAlign: 'right' },
+  menuRight: { flexDirection: "row-reverse", alignItems: "center", gap: 8 },
   menuValue: { fontSize: 13, fontFamily: "Inter_400Regular" },
-  footer: { textAlign: "center", fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 4 },
+  footerContainer: { alignItems: 'center', marginTop: 10, marginBottom: 20 },
+  footerText: { fontSize: 12, fontFamily: "Inter_400Regular", marginBottom: 4 },
+  footerSubtext: { fontSize: 11, fontFamily: "Inter_400Regular", opacity: 0.8 },
   modalContainer: { flex: 1 },
   modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 16, borderBottomWidth: 1 },
   modalTitle: { fontSize: 16, fontFamily: "Inter_700Bold" },
   saveBtn: { fontSize: 15, fontFamily: "Inter_700Bold" },
   modalContent: { padding: 20 },
-  field: { marginBottom: 16 },
-  fieldLabel: { fontSize: 13, fontFamily: "Inter_500Medium", textAlign: "right", marginBottom: 6 },
+  field: { marginBottom: 20 },
+  fieldLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold", textAlign: "right", marginBottom: 8 },
   fieldInput: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, fontFamily: "Inter_400Regular" },
 });
