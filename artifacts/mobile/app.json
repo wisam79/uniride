@@ -1,0 +1,57 @@
+{
+  "expo": {
+    "name": "UniRide Iraq",
+    "slug": "mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "mobile",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/splash.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#0D2847"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "يونيرايد يحتاج إلى موقعك لتتبع الرحلة وعرض السائقين القريبين.",
+        "NSLocationAlwaysUsageDescription": "يونيرايد يحتاج إلى موقعك لتتبع رحلتك في الخلفية.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "يونيرايد يحتاج إلى موقعك لتتبع الرحلة وعرض السائقين القريبين."
+      }
+    },
+    "android": {
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      [
+        "expo-router",
+        {
+          "origin": "https://replit.com/"
+        }
+      ],
+      "expo-font",
+      "expo-web-browser",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "يونيرايد يستخدم موقعك لتتبع الرحلة.",
+          "locationAlwaysPermission": "يونيرايد يستخدم موقعك لتتبع الرحلة في الخلفية.",
+          "locationWhenInUsePermission": "يونيرايد يستخدم موقعك لعرض السائقين القريبين."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
