@@ -6,11 +6,32 @@
     "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
-    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
+    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
+    "test": "vitest run",
+    "test:unit": "vitest run --dir tests/unit",
+    "test:security": "vitest run --dir tests/security",
+    "test:concurrency": "vitest run --dir tests/concurrency",
+    "test:integration": "vitest run --dir tests/integration",
+    "test:edge-cases": "vitest run --dir tests/edge-cases",
+    "test:performance": "vitest run --dir tests/performance --reporter=verbose",
+    "test:watch": "vitest watch",
+    "test:coverage": "vitest run --coverage",
+    "db:migrate:test": "pnpm tsx scripts/db/migrate.ts --env=test",
+    "db:seed:test": "pnpm tsx scripts/db/seed.ts --env=test",
+    "db:seed:performance": "pnpm tsx scripts/db/seed.ts --env=performance"
   },
   "private": true,
   "devDependencies": {
     "typescript": "~5.9.2",
-    "prettier": "^3.8.1"
+    "prettier": "^3.8.1",
+    "vitest": "^1.6.0",
+    "@vitest/coverage-v8": "^1.6.0",
+    "@types/node": "^20.12.12",
+    "tsx": "^4.19.0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "postgres": "^3.4.4",
+    "zod": "^3.23.8"
   }
 }
