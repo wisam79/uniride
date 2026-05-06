@@ -4,8 +4,7 @@ import * as Haptics from "expo-haptics";
 import React, { useEffect, useRef } from "react";
 import { Animated, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
-import { SubscriptionPlan } from "@/context/AppContext";
-import { useColors } from "@/hooks/useColors";
+import { SubscriptionPlan } from "@/context";import { useColors } from "@/hooks/useColors";
 
 interface Plan {
   id: SubscriptionPlan;

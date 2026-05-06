@@ -11,8 +11,11 @@ interface PriceBreakdownProps {
 export default function PriceBreakdown({ fare, label }: PriceBreakdownProps) {
   const colors = useColors();
 
-  const driverShare = Math.round(fare * 0.85);
-  const appCommission = fare - driverShare;
+  const COMMISSION_RATE = 0.15;
+  const appCommission = Math.round(fare * COMMISSION_RATE);
+  const driverShare = fare - appCommission;
+  const driverPercent = Math.round((driverShare / fare) * 100);
+  const appPercent = 100 - driverPercent;
 
   const formatCurrency = (amount: number) => {
     return amount.toLocaleString("ar-IQ") + " د.ع";
@@ -47,7 +50,7 @@ export default function PriceBreakdown({ fare, label }: PriceBreakdownProps) {
           style={[
             styles.progressBar,
             {
-              width: "85%",
+              width: `${driverPercent}%`,
               backgroundColor: colors.primary,
               borderTopLeftRadius: 6,
               borderBottomLeftRadius: 6,
@@ -58,7 +61,7 @@ export default function PriceBreakdown({ fare, label }: PriceBreakdownProps) {
           style={[
             styles.progressBar,
             {
-              width: "15%",
+              width: `${appPercent}%`,
               backgroundColor: colors.accent,
               borderTopRightRadius: 6,
               borderBottomRightRadius: 6,
@@ -74,7 +77,7 @@ export default function PriceBreakdown({ fare, label }: PriceBreakdownProps) {
               style={[styles.dot, { backgroundColor: colors.success }]}
             />
             <Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>
-              حصة السائق: 85%
+              حصة السائق: {driverPercent}%
             </Text>
           </View>
           <Text style={[styles.breakdownValue, { color: colors.success }]}>
@@ -88,7 +91,7 @@ export default function PriceBreakdown({ fare, label }: PriceBreakdownProps) {
               style={[styles.dot, { backgroundColor: colors.accent }]}
             />
             <Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>
-              عمولة التطبيق: 15%
+              عمولة التطبيق: {appPercent}%
             </Text>
           </View>
           <Text style={[styles.breakdownValue, { color: colors.accent }]}>

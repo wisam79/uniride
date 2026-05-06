@@ -4,7 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import React, { useState, useRef } from "react";
 import { StyleSheet, Text, TouchableOpacity, View, Animated, LayoutAnimation, Platform, UIManager } from "react-native";
 
-import { Driver, SubscriptionPlan } from "@/context/AppContext";
+import { DriverProfile, SubscriptionPlan } from "@/context";
 import { useColors } from "@/hooks/useColors";
 
 if (Platform.OS === 'android') {
@@ -14,8 +14,8 @@ if (Platform.OS === 'android') {
 }
 
 interface DriverCardProps {
-  driver: Driver;
-  onSubscribe: (driver: Driver, plan: SubscriptionPlan) => void;
+  driver: DriverProfile;
+  onSubscribe: (driver: DriverProfile, plan: SubscriptionPlan) => void;
 }
 
 export function DriverCard({ driver, onSubscribe }: DriverCardProps) {
@@ -33,33 +33,41 @@ export function DriverCard({ driver, onSubscribe }: DriverCardProps) {
     Haptics.selectionAsync();
   }
 
+  // ARCHITECTURE / BUSINESS LOGIC FIX: Fail securely instead of relying on frontend magic numbers.
+  if (typeof driver.monthly_fee !== 'number' || driver.monthly_fee <= 0) {
+    return (
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.destructive, padding: 24, alignItems: 'center' }]}>
+        <FeatherIcon name="alert-triangle" size={28} color={colors.destructive} style={{ marginBottom: 12 }} />
+        <Text style={{ color: colors.destructive, fontFamily: "Inter_600SemiBold", textAlign: "center", fontSize: 14 }}>
+          تسعير السائق غير متاح حالياً.
+        </Text>
+      </View>
+    );
+  }
+
+  const fare = driver.monthly_fee;
   const plans: { plan: SubscriptionPlan; label: string; fare: number; savings: string; isPopular?: boolean }[] = [
-    { plan: "basic", label: "أساسي", fare: driver.basicFare, savings: "20 رحلة" },
-    { plan: "standard", label: "قياسي", fare: driver.standardFare, savings: "40 رحلة", isPopular: true },
-    { plan: "premium", label: "مميز", fare: driver.premiumFare, savings: "غير محدود" },
+    { plan: "basic", label: "أساسي", fare: fare, savings: "22 رحلة" },
+    { plan: "standard", label: "قياسي", fare: fare, savings: "44 رحلة", isPopular: true },
+    { plan: "premium", label: "مميز", fare: fare, savings: "غير محدود" },
   ];
 
-  const rating = Number(driver.rating);
+  const rating = 5;
   const stars = [1, 2, 3, 4, 5].map(i => (
     <Text key={i} style={{ color: i <= Math.round(rating) ? "#FFD700" : colors.border, fontSize: 12 }}>
       {i <= Math.round(rating) ? "★" : "☆"}
     </Text>
   ));
 
-  const initials = driver.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  const driverName = driver.profile?.full_name ?? "سائق";
+  const initials = driverName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
 
-  const universityAreaMap: Record<string, string> = {
-    "جامعة بغداد": "الجادرية، الكرادة",
-    "الجامعة التكنولوجية": "الزعفرانية، الرشيد",
-    "الجامعة المستنصرية": "شارع فلسطين، زيونة",
-    "جامعة النهرين": "الجادرية، المنصور",
-  };
-  const areasServed = universityAreaMap[driver.university ?? ""] || "بغداد، الكرادة، المنصور";
+  const areasServed = "بغداد، الكرادة، المنصور";
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   React.useEffect(() => {
-    if (driver.isOnline) {
+    if (driver.is_available) {
       Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
@@ -77,53 +85,52 @@ export function DriverCard({ driver, onSubscribe }: DriverCardProps) {
     } else {
       pulseAnim.setValue(1);
     }
-  }, [driver.isOnline]);
+  }, [driver.is_available]);
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <TouchableOpacity
+      style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <TouchableOpacity onPress={toggleExpand} activeOpacity={0.7} style={styles.header}>
         <View style={[
           styles.avatar, 
           { 
             backgroundColor: colors.primary,
             borderWidth: 3,
-            borderColor: driver.isOnline ? colors.success : colors.mutedForeground
+            borderColor: driver.is_available ? colors.success : colors.mutedForeground
           }
         ]}>
           <Text style={[styles.avatarText, { color: colors.primaryForeground }]}>
             {initials}
           </Text>
-          {driver.totalTrips > 50 && (
+          {(driver.capacity ?? 0) > 5 && (
             <View style={[styles.verifiedBadge, { backgroundColor: colors.primary, borderColor: colors.card }]}>
               <FeatherIcon name="check" size={8} color="#fff" />
             </View>
           )}
         </View>
-        <View style={styles.info}>
-          <View style={styles.nameRow}>
-            <Text style={[styles.name, { color: colors.foreground }]}>{driver.name}</Text>
-            {driver.totalTrips > 100 && (
-              <View style={[styles.badge, { backgroundColor: colors.primary + '15' }]}>
-                <Text style={[styles.badgeText, { color: colors.primary }]}>🔥 سائق متمرس</Text>
-              </View>
-            )}
-          </View>
+        <View style={styles.headerText}>
+          <Text style={[styles.name, { color: colors.foreground }]}>{driver.profile?.full_name ?? "سائق جديد"}</Text>
+          {(driver.capacity ?? 0) > 10 && (
+            <View style={[styles.badge, { backgroundColor: colors.primary + '15' }]}>
+              <Text style={[styles.badgeText, { color: colors.primary }]}>🔥 سائق متمرس</Text>
+            </View>
+          )}
           <View style={styles.ratingRow}>
             {stars}
             <Text style={[styles.ratingValue, { color: colors.mutedForeground }]}>({rating.toFixed(1)})</Text>
           </View>
-          <Text style={[styles.vehicle, { color: colors.mutedForeground }]}>
-            {driver.vehicleType ?? "—"}{driver.vehicleColor ? ` · ${driver.vehicleColor}` : ""}
+          <Text style={[styles.detailText, { color: colors.mutedForeground }]}>
+            المركبة: {driver.vehicle_info ?? "غير محدد"}
           </Text>
         </View>
         <View style={styles.headerRight}>
           <View style={styles.statusBadge}>
-            <Animated.View style={[styles.onlineDot, { backgroundColor: driver.isOnline ? colors.success : colors.mutedForeground, opacity: pulseAnim }]} />
-            <Text style={[styles.statusText, { color: driver.isOnline ? colors.success : colors.mutedForeground }]}>
-              {driver.isOnline ? "متاح الآن" : "غير متاح"}
+            <Animated.View style={[styles.onlineDot, { backgroundColor: driver.is_available ? colors.success : colors.mutedForeground, opacity: pulseAnim }]} />
+            <Text style={[styles.statusText, { color: driver.is_available ? colors.success : colors.mutedForeground }]}>
+              {driver.is_available ? "متاح الآن" : "غير متاح"}
             </Text>
           </View>
-          {driver.isOnline && (
+          {driver.is_available && (
             <Text style={[styles.waitTime, { color: colors.mutedForeground }]}>
               ~5 دق
             </Text>
@@ -138,7 +145,7 @@ export function DriverCard({ driver, onSubscribe }: DriverCardProps) {
             <View style={styles.universityRow}>
               <FeatherIcon name="book-open" size={14} color={colors.primary} />
               <Text style={[styles.universityText, { color: colors.foreground }]}>
-                {driver.university ?? "—"}
+                —
               </Text>
             </View>
             <View style={styles.areaRow}>
@@ -152,14 +159,14 @@ export function DriverCard({ driver, onSubscribe }: DriverCardProps) {
           <View style={[styles.statsRow, { borderColor: colors.border }]}>
             <View style={styles.stat}>
               <FeatherIcon name="map" size={14} color={colors.primary} />
-              <Text style={[styles.statValue, { color: colors.foreground }]}>{driver.totalTrips}</Text>
-              <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>رحلة</Text>
+              <Text style={[styles.statValue, { color: colors.foreground }]}>{driver.capacity}</Text>
+              <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>مقعد</Text>
             </View>
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
             <View style={styles.stat}>
-              <FeatherIcon name="user" size={14} color={colors.accent} />
-              <Text style={[styles.statValue, { color: colors.foreground }]}>{driver.vehiclePlate ?? "—"}</Text>
-              <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>رقم السيارة</Text>
+              <FeatherIcon name="check-circle" size={14} color={colors.accent} />
+              <Text style={[styles.statValue, { color: colors.foreground }]}>متاح</Text>
+              <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>الحالة</Text>
             </View>
           </View>
 
@@ -174,9 +181,9 @@ export function DriverCard({ driver, onSubscribe }: DriverCardProps) {
             </View>
             <View style={styles.comparisonRow}>
               <Text style={[styles.comparisonLabel, { flex: 1.2, color: colors.foreground }]}>السعر</Text>
-              <Text style={[styles.comparisonValue, { color: colors.accent }]}>{(driver.basicFare / 1000).toFixed(0)}k</Text>
-              <Text style={[styles.comparisonValue, { color: colors.accent }]}>{(driver.standardFare / 1000).toFixed(0)}k</Text>
-              <Text style={[styles.comparisonValue, { color: colors.accent }]}>{(driver.premiumFare / 1000).toFixed(0)}k</Text>
+              <Text style={[styles.comparisonValue, { color: colors.accent }]}>{(fare / 1000).toFixed(0)}k</Text>
+              <Text style={[styles.comparisonValue, { color: colors.accent }]}>{(fare / 1000).toFixed(0)}k</Text>
+              <Text style={[styles.comparisonValue, { color: colors.accent }]}>{(fare / 1000).toFixed(0)}k</Text>
             </View>
             <View style={[styles.comparisonRow, { backgroundColor: colors.secondary + '30' }]}>
               <Text style={[styles.comparisonLabel, { flex: 1.2, color: colors.foreground }]}>الرحلات</Text>
@@ -252,7 +259,7 @@ export function DriverCard({ driver, onSubscribe }: DriverCardProps) {
           </View>
         </View>
       )}
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -270,6 +277,8 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 20 },
   badgeText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
   vehicle: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  headerText: { flex: 1 },
+  detailText: { fontSize: 12, marginTop: 4 },
   headerRight: { alignItems: 'flex-end', gap: 4 },
   statusBadge: { flexDirection: "row", alignItems: "center", gap: 4 },
   onlineDot: { width: 7, height: 7, borderRadius: 4 },

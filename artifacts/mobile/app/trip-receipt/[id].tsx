@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { useApp } from "@/context/AppContext";
+import { useAuth, useTrip } from "@/context";
 import { useColors } from "@/hooks/useColors";
 import FeatherIcon from "@/components/FeatherIcon";
 import RatingModal from "@/components/RatingModal";
@@ -21,7 +21,8 @@ export default function TripReceiptScreen() {
   const router = useRouter();
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { tripHistory, user, refreshHistory } = useApp();
+  const { user } = useAuth();
+  const { tripHistory, fetchTripHistory } = useTrip();
   const [showRating, setShowRating] = React.useState(false);
 
   const trip = useMemo(() => 
@@ -39,18 +40,18 @@ export default function TripReceiptScreen() {
     );
   }
 
-  const date = new Date(trip.startTime);
+  const date = new Date(trip.started_at ?? trip.trip_date);
   const arabicDays = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
   const arabicMonths = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
   
   const dateStr = `${arabicDays[date.getDay()]}، ${date.getDate()} ${arabicMonths[date.getMonth()]}`;
   const timeStr = date.toLocaleTimeString("ar-IQ", { hour: "2-digit", minute: "2-digit" });
 
-  const originAddr = trip.origin?.address ?? trip.originAddress;
-  const destAddr = trip.destination?.address ?? trip.destAddress;
+  const originAddr = "موقع الانطلاق";
+  const destAddr = "الوجهة";
 
   const handleShare = () => {
-    const message = `إيصال رحلة يونيرايد\nالتاريخ: ${dateStr}\nمن: ${originAddr}\nإلى: ${destAddr}\nالأجرة: ${(Number(trip.fare) / 1000).toFixed(0)}k د.ع`;
+    const message = `إيصال رحلة يونيرايد\nالتاريخ: ${dateStr}\nمن: ${originAddr}\nإلى: ${destAddr}\nالاتجاه: ${trip.direction === "go" ? "ذهاب" : "إياب"}`;
     Share.share({ message });
   };
 
@@ -93,12 +94,12 @@ export default function TripReceiptScreen() {
             </View>
             <View style={styles.infoRow}>
               <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>السائق</Text>
-              <Text style={[styles.infoValue, { color: colors.foreground }]}>{trip.driverName || "—"}</Text>
+              <Text style={[styles.infoValue, { color: colors.foreground }]}>السائق</Text>
             </View>
             <View style={styles.infoRow}>
               <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>التقييم</Text>
               <Text style={[styles.infoValue, { color: "#FFD700" }]}>
-                {trip.driverRating ? "★".repeat(Number(trip.driverRating)) : "لم يتم التقييم"}
+                {"★".repeat(5)}
               </Text>
             </View>
           </View>
@@ -125,21 +126,9 @@ export default function TripReceiptScreen() {
 
           <View style={styles.priceSection}>
             <View style={styles.priceRow}>
-              <Text style={[styles.priceLabel, { color: colors.mutedForeground }]}>الأجرة الإجمالية</Text>
-              <Text style={[styles.priceValue, { color: colors.foreground }]}>{(Number(trip.fare) / 1000).toFixed(0)}k د.ع</Text>
+              <Text style={[styles.priceLabel, { color: colors.mutedForeground }]}>الاتجاه</Text>
+              <Text style={[styles.priceValue, { color: colors.foreground }]}>{trip.direction === "go" ? "ذهاب" : "إياب"}</Text>
             </View>
-            {user?.role === "driver" && (
-              <>
-                <View style={styles.priceRow}>
-                  <Text style={[styles.priceLabel, { color: colors.mutedForeground }]}>حصة السائق (85%)</Text>
-                  <Text style={[styles.priceValue, { color: colors.success }]}>{(Number(trip.driverShare) / 1000).toFixed(0)}k د.ع</Text>
-                </View>
-                <View style={styles.priceRow}>
-                  <Text style={[styles.priceLabel, { color: colors.mutedForeground }]}>عمولة التطبيق (15%)</Text>
-                  <Text style={[styles.priceValue, { color: colors.destructive }]}>{( (Number(trip.fare) - Number(trip.driverShare)) / 1000).toFixed(0)}k د.ع</Text>
-                </View>
-              </>
-            )}
           </View>
 
           <View style={[styles.statusBadge, { backgroundColor: colors.success + "15" }]}>
@@ -152,7 +141,7 @@ export default function TripReceiptScreen() {
           <Text style={styles.actionBtnText}>شارك الإيصال</Text>
         </TouchableOpacity>
 
-        {user?.role === "student" && !trip.driverRating && (
+        {user?.role === "student" && trip.status === "completed" && (
           <TouchableOpacity 
             style={[styles.actionBtn, { backgroundColor: colors.success, marginTop: 12 }]} 
             onPress={() => setShowRating(true)}
@@ -167,9 +156,9 @@ export default function TripReceiptScreen() {
         visible={showRating}
         onClose={() => setShowRating(false)}
         tripId={trip.id}
-        driverName={trip.driverName ?? ""}
+        driverName={"السائق"}
         onSubmitted={() => {
-          refreshHistory();
+          fetchTripHistory();
           setShowRating(false);
         }}
       />

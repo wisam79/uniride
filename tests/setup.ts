@@ -1,21 +1,12 @@
 import { beforeAll, afterAll, afterEach } from 'vitest';
-import { sql } from '@vercel/postgres';
 
 // Global test setup for database connections
 beforeAll(async () => {
   console.log('🔧 Setting up test environment...');
-  
-  // Verify database connection
-  try {
-    const result = await sql`SELECT 1 as connected`;
-    console.log('✅ Database connected:', result.rows[0]);
-  } catch (error) {
-    console.warn('⚠️  Database not available, using mocks');
-  }
+  console.log('✅ Using mocked Supabase client for unit tests');
 });
 
 afterEach(async () => {
-  // Clean up between tests if needed
   console.log('🧹 Test cleanup completed');
 });
 
@@ -52,19 +43,35 @@ export const createTestUser = async (overrides = {}) => ({
   ...overrides,
 });
 
-export const createTestRoute = async (overrides = {}) => ({
-  id: `test-route-${Date.now()}`,
-  name: 'Test Route',
-  seats: 40,
-  availableSeats: 40,
-  genderPreference: 'any',
+export const createTestDriver = async (overrides = {}) => ({
+  id: `test-driver-${Date.now()}`,
+  user_id: `test-user-${Date.now()}`,
+  capacity: 4,
+  available_seats: 4,
+  monthly_fee: 90000,
+  commission_rate: 15,
+  vehicle_info: 'Toyota Corolla',
+  is_available: true,
   ...overrides,
 });
 
 export const createTestSubscription = async (overrides = {}) => ({
   id: `test-sub-${Date.now()}`,
   status: 'active',
-  startDate: new Date(),
-  endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+  student_id: 'student-1',
+  driver_id: 'driver-1',
+  monthly_fee: 90000,
+  commission_rate: 15,
+  commission_amount: 13500,
+  driver_payout: 76500,
+  start_date: new Date().toISOString(),
+  end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
   ...overrides,
+});
+
+export const createMockAppSettings = () => ({
+  default_commission_rate: "15",
+  cancellation_fee_percent: "25",
+  absence_daily_deduction_percent: "5",
+  tracking_interval_minutes: "5",
 });

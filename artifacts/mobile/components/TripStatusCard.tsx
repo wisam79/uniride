@@ -1,52 +1,103 @@
 import FeatherIcon from "@/components/FeatherIcon";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useRef, useState } from "react";
-import { Alert, Animated, Linking, Share, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  Alert,
+  Animated,
+  Linking,
+  Share,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
-import { Trip, TripStatus, useApp } from "@/context/AppContext";
+import { useTrip, type TripData } from "@/context";
 import { useColors } from "@/hooks/useColors";
 
 interface TripStatusCardProps {
-  trip: Trip;
+  trip: TripData;
   role: "student" | "driver";
   onComplete?: () => void;
   onCancel?: () => void;
+  studentName?: string;
+  driverName?: string;
+  driverPhone?: string;
+  driverVehicle?: string;
+  driverRating?: number;
+  fare?: number;
+  originAddr?: string;
+  destAddr?: string;
 }
 
-const STUDENT_STEPS: { status: TripStatus; label: string; icon: string }[] = [
-  { status: "waiting", label: "بانتظار السائق", icon: "clock" },
-  { status: "accepted", label: "السائق في الطريق", icon: "navigation" },
-  { status: "pickup", label: "السائق وصل", icon: "map-pin" },
-  { status: "inprogress", label: "الرحلة جارية", icon: "truck" },
-  { status: "arrived", label: "وصلت!", icon: "check-circle" },
+type TripStatusType = TripData["status"];
+
+const STUDENT_STEPS: { status: TripStatusType; label: string; icon: string }[] = [
+  { status: "scheduled", label: "مجدولة", icon: "clock" },
+  { status: "driver_waiting", label: "السائق قادم", icon: "truck" },
+  { status: "in_transit", label: "في الطريق", icon: "navigation" },
+  { status: "completed", label: "وصلت", icon: "check-circle" },
 ];
 
-const DRIVER_STEPS: { status: TripStatus; label: string; icon: string }[] = [
-  { status: "accepted", label: "متجه للاستلام", icon: "navigation" },
-  { status: "pickup", label: "انتظار الطالب", icon: "map-pin" },
-  { status: "inprogress", label: "الرحلة جارية", icon: "truck" },
-  { status: "arrived", label: "الوصول", icon: "check-circle" },
+const DRIVER_STEPS: { status: TripStatusType; label: string; icon: string }[] = [
+  { status: "scheduled", label: "مجدولة", icon: "clock" },
+  { status: "driver_waiting", label: "متجه للطالب", icon: "navigation" },
+  { status: "in_transit", label: "الرحلة جارية", icon: "truck" },
+  { status: "completed", label: "اكتملت", icon: "check-circle" },
 ];
 
-function getStepIndex(status: TripStatus, role: "student" | "driver") {
-  const steps = role === "student" ? STUDENT_STEPS : DRIVER_STEPS;
+const STATUS_COLORS: Record<TripStatusType, keyof ReturnType<typeof useColors>> = {
+  scheduled: "primary",
+  driver_waiting: "warning",
+  in_transit: "success",
+  completed: "success",
+  absent: "destructive",
+  cancelled: "destructive",
+};
+
+const NEXT_STATUS: Partial<Record<TripStatusType, TripStatusType>> = {
+  scheduled: "driver_waiting",
+  driver_waiting: "in_transit",
+  in_transit: "completed",
+};
+
+const DRIVER_STATUS_ACTIONS: Partial<Record<TripStatusType, string>> = {
+  scheduled: "التوجه للطالب",
+  driver_waiting: "بدء الرحلة",
+  in_transit: "إنهاء الرحلة",
+};
+
+function getStepIndex(status: TripStatusType, steps: typeof STUDENT_STEPS) {
   return steps.findIndex((s) => s.status === status);
 }
 
-export function TripStatusCard({ trip, role, onComplete, onCancel }: TripStatusCardProps) {
+export function TripStatusCard({
+  trip,
+  role,
+  onComplete,
+  onCancel,
+  studentName = "الطالب",
+  driverName = "السائق",
+  driverPhone = "0770000000",
+  driverVehicle = "سيارة",
+  driverRating = 5.0,
+  fare = 0,
+  originAddr = "موقع الانطلاق",
+  destAddr = "الوجهة",
+}: TripStatusCardProps) {
   const colors = useColors();
-  const { cancelTrip, completeTrip, updateTripStatus } = useApp();
+  const { cancelTrip, acceptTrip, endTrip } = useTrip();
   const steps = role === "student" ? STUDENT_STEPS : DRIVER_STEPS;
-  const currentIdx = getStepIndex(trip.status, role);
+  const currentIdx = getStepIndex(trip.status, steps);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const [timeLeft, setTimeLeft] = useState<string>("");
-  const targetTime = useRef(new Date().getTime() + 5 * 60 * 1000).current;
+  const targetTime = useRef(Date.now() + 5 * 60 * 1000).current;
 
   useEffect(() => {
-    if (trip.status === "accepted") {
+    if (trip.status === "scheduled") {
       const interval = setInterval(() => {
-        const now = new Date().getTime();
+        const now = Date.now();
         const diff = targetTime - now;
         if (diff <= 0) {
           setTimeLeft("0:00");
@@ -59,13 +110,13 @@ export function TripStatusCard({ trip, role, onComplete, onCancel }: TripStatusC
       }, 1000);
       return () => clearInterval(interval);
     }
-  }, [trip.status, targetTime]);
+  }, [trip.status]);
 
   useEffect(() => {
     if (trip.status !== "completed" && trip.status !== "cancelled") {
       const anim = Animated.loop(
         Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.18, duration: 700, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1.15, duration: 700, useNativeDriver: true }),
           Animated.timing(pulseAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
         ])
       );
@@ -74,24 +125,12 @@ export function TripStatusCard({ trip, role, onComplete, onCancel }: TripStatusC
     }
   }, [trip.status]);
 
-  function handleComplete() {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    completeTrip(trip.id);
-    onComplete?.();
-  }
+  const statusColorKey = STATUS_COLORS[trip.status] ?? "primary";
+  const currentColor =
+    colors[statusColorKey] ?? colors.primary;
 
-  function handleCancel() {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    Alert.alert(
-      "إلغاء الرحلة",
-      "يرجى اختيار سبب الإلغاء:",
-      [
-        { text: "السائق تأخر", onPress: () => performCancel() },
-        { text: "غيّرت رأيي", onPress: () => performCancel() },
-        { text: "سبب آخر", onPress: () => performCancel() },
-        { text: "تراجع", style: "cancel" }
-      ]
-    );
+  function handleCallDriver() {
+    Linking.openURL(`tel:${driverPhone}`);
   }
 
   function performCancel() {
@@ -99,70 +138,99 @@ export function TripStatusCard({ trip, role, onComplete, onCancel }: TripStatusC
     onCancel?.();
   }
 
-  function handleShareTrip() {
-    const originAddr = trip.origin?.address ?? trip.originAddress;
-    const destAddr = trip.destination?.address ?? trip.destAddress;
-    Share.share({
-      message: `أنا الآن في رحلة يونيرايد 🚗\nمن: ${originAddr}\nإلى: ${destAddr}\nالسائق: ${trip.driverName ?? "غير معروف"}`,
-    });
+  function handleCancel() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    Alert.alert("إلغاء الرحلة", "يرجى اختيار سبب الإلغاء:", [
+      { text: "السائق تأخر", onPress: () => performCancel() },
+      { text: "غيّرت رأيي", onPress: () => performCancel() },
+      { text: "سبب آخر", onPress: () => performCancel() },
+      { text: "تراجع", style: "cancel" },
+    ]);
   }
 
-  function handleQuickMessage(msg: string) {
-    Alert.alert("تم إرسال الرسالة للسائق", msg);
-  }
-
-  function handleNextStatus() {
+  async function handleNextStatus() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const nextStatuses: Partial<Record<TripStatus, TripStatus>> = {
-      accepted: "pickup",
-      pickup: "inprogress",
-      inprogress: "arrived",
-    };
-    const next = nextStatuses[trip.status];
-    if (next) updateTripStatus(trip.id, next);
-    if (trip.status === "arrived") handleComplete();
-  }
+    const next = NEXT_STATUS[trip.status];
+    if (!next) return;
 
-  function handleCallDriver() {
-    if (trip.driverPhone) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      Linking.openURL(`tel:${trip.driverPhone}`);
+    try {
+      await updateTripStatus(trip.id, next);
+    } catch {
+      Alert.alert("خطأ", "فشل تحديث حالة الرحلة");
     }
   }
 
-  const statusColors: Record<TripStatus, string> = {
-    waiting: colors.warning,
-    accepted: colors.primary,
-    pickup: colors.accent,
-    inprogress: colors.success,
-    arrived: colors.success,
-    completed: colors.success,
-    cancelled: colors.destructive,
-  };
+  function handleShareTrip() {
+    Share.share({
+      message: `أنا في رحلة يونيرايد\nمن: ${originAddr}\nإلى: ${destAddr}\nالسائق: ${driverName}`,
+    });
+  }
 
-  const currentColor = statusColors[trip.status] ?? colors.primary;
-  const originAddr = trip.origin?.address ?? trip.originAddress;
-  const destAddr = trip.destination?.address ?? trip.destAddress;
-
-  if (trip.status === "completed" as TripStatus) {
+  if (trip.status === "completed") {
     return (
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.success + "40" }]}>
         <View style={[styles.completedBanner, { backgroundColor: colors.success + "15" }]}>
-          <FeatherIcon name="check-circle" size={22} color={colors.success} />
-          <Text style={[styles.completedText, { color: colors.success }]}>وصلت بأمان! ✓</Text>
+          <FeatherIcon name="check-circle" size={24} color={colors.success} />
+          <Text style={[styles.completedText, { color: colors.success }]}>وصلت بأمان</Text>
         </View>
         <View style={styles.routeRow}>
           <FeatherIcon name="map-pin" size={12} color={colors.success} />
-          <Text style={[styles.routeText, { color: colors.mutedForeground }]} numberOfLines={1}>{originAddr}</Text>
+          <Text style={[styles.routeText, { color: colors.mutedForeground }]} numberOfLines={1}>
+            {originAddr}
+          </Text>
           <FeatherIcon name="arrow-left" size={12} color={colors.mutedForeground} />
           <FeatherIcon name="flag" size={12} color={colors.accent} />
-          <Text style={[styles.routeText, { color: colors.mutedForeground }]} numberOfLines={1}>{destAddr}</Text>
-        </View>
-        <View style={[styles.fareRow, { borderColor: colors.border }]}>
-          <FeatherIcon name="tag" size={13} color={colors.primary} />
-          <Text style={[styles.fareText, { color: colors.foreground }]}>
-            {(Number(trip.fare) / 1000).toFixed(0)}k دينار
+          <Text style={[styles.routeText, { color: colors.mutedForeground }]} numberOfLines={1}>
+            {destAddr}
           </Text>
+        </View>
+        <View style={[styles.stepsRow, { justifyContent: "center" }]}>
+          {steps.map((step, idx) => {
+            const isDone = idx <= currentIdx;
+            return (
+              <React.Fragment key={step.status}>
+                <View style={styles.stepItem}>
+                  <View
+                    style={[
+                      styles.stepCircle,
+                      {
+                        backgroundColor: isDone ? colors.success : colors.muted,
+                        borderColor: isDone ? colors.success : colors.border,
+                      },
+                    ]}
+                  >
+                    <FeatherIcon
+                      name={isDone ? "check" : step.icon as any}
+                      size={12}
+                      color={isDone ? "#fff" : colors.mutedForeground}
+                    />
+                  </View>
+                  <Text style={[styles.stepLabel, { color: isDone ? colors.success : colors.mutedForeground }]}>
+                    {step.label}
+                  </Text>
+                </View>
+                {idx < steps.length - 1 && (
+                  <View
+                    style={[
+                      styles.connector,
+                      { backgroundColor: idx < currentIdx ? colors.success : colors.border },
+                    ]}
+                  />
+                )}
+              </React.Fragment>
+            );
+          })}
+        </View>
+      </View>
+    );
+  }
+
+  if (trip.status === "cancelled") {
+    return (
+      <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.destructive + "40" }]}>
+        <View style={[styles.completedBanner, { backgroundColor: colors.destructive + "15" }]}>
+          <FeatherIcon name="x-circle" size={24} color={colors.destructive} />
+          <Text style={[styles.completedText, { color: colors.destructive }]}>الرحلة ملغاة</Text>
         </View>
       </View>
     );
@@ -172,31 +240,42 @@ export function TripStatusCard({ trip, role, onComplete, onCancel }: TripStatusC
     <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.routeRow}>
         <FeatherIcon name="map-pin" size={12} color={colors.success} />
-        <Text style={[styles.routeText, { color: colors.mutedForeground }]} numberOfLines={1}>{originAddr}</Text>
+        <Text style={[styles.routeText, { color: colors.mutedForeground }]} numberOfLines={1}>
+          {originAddr}
+        </Text>
         <FeatherIcon name="arrow-left" size={12} color={colors.mutedForeground} />
         <FeatherIcon name="flag" size={12} color={colors.accent} />
-        <Text style={[styles.routeText, { color: colors.mutedForeground }]} numberOfLines={1}>{destAddr}</Text>
+        <Text style={[styles.routeText, { color: colors.mutedForeground }]} numberOfLines={1}>
+          {destAddr}
+        </Text>
       </View>
 
       <View style={[styles.statusBadge, { backgroundColor: currentColor + "20" }]}>
-        <View style={[styles.dot, { backgroundColor: currentColor }]} />
-        <Text style={[styles.statusText, { color: currentColor }]}>
+        <View style={[styles.dot, { backgroundColor: currentColor as any }]} />
+        <Text style={[styles.statusText, { color: currentColor as any }]}>
           {steps[currentIdx]?.label ?? "جارٍ..."}
         </Text>
-        {(trip.status === "accepted" || trip.status === "pickup") && (
+        {trip.status === "scheduled" && timeLeft ? (
           <Text style={[styles.etaText, { color: colors.mutedForeground }]}>
-            · {trip.status === "accepted" && timeLeft ? `وقت الوصول: ${timeLeft} دق` : "~5 دقائق"}
+            · {timeLeft} دق
           </Text>
-        )}
-        <TouchableOpacity onPress={handleShareTrip} style={styles.shareBtnMini}>
-          <FeatherIcon name="share-2" size={14} color={currentColor} />
-        </TouchableOpacity>
+        ) : trip.status === "driver_waiting" ? (
+          <Text style={[styles.etaText, { color: colors.mutedForeground }]}>
+            · ~3 دق
+          </Text>
+        ) : trip.status === "in_transit" ? (
+          <Text style={[styles.etaText, { color: colors.mutedForeground }]}>
+            · جارية
+          </Text>
+        ) : null}
       </View>
 
       <View style={styles.stepsRow}>
         {steps.map((step, idx) => {
           const isActive = idx === currentIdx;
           const isDone = idx < currentIdx;
+          const stepColor = isDone || isActive ? currentColor : colors.muted;
+
           return (
             <React.Fragment key={step.status}>
               <View style={styles.stepItem}>
@@ -204,22 +283,26 @@ export function TripStatusCard({ trip, role, onComplete, onCancel }: TripStatusC
                   style={[
                     styles.stepCircle,
                     {
-                      backgroundColor: isDone || isActive ? currentColor : colors.muted,
-                      borderColor: isDone || isActive ? currentColor : colors.border,
+                      backgroundColor: (isDone || isActive ? stepColor : "transparent") as any,
+                      borderColor: (isDone || isActive ? stepColor : colors.border) as any,
+                      borderWidth: isDone || isActive ? 2 : 1.5,
                       transform: isActive ? [{ scale: pulseAnim }] : [],
                     },
                   ]}
                 >
                   <FeatherIcon
-                    name={step.icon as any}
-                    size={12}
+                    name={isDone ? "check" : step.icon as any}
+                    size={11}
                     color={isDone || isActive ? "#fff" : colors.mutedForeground}
                   />
                 </Animated.View>
                 <Text
                   style={[
                     styles.stepLabel,
-                    { color: isDone || isActive ? colors.foreground : colors.mutedForeground },
+                    {
+                      color: isDone || isActive ? colors.foreground : colors.mutedForeground,
+                      fontFamily: isActive ? "Inter_600SemiBold" : "Inter_400Regular",
+                    },
                   ]}
                   numberOfLines={2}
                 >
@@ -227,108 +310,98 @@ export function TripStatusCard({ trip, role, onComplete, onCancel }: TripStatusC
                 </Text>
               </View>
               {idx < steps.length - 1 && (
-                <View style={[styles.connector, { backgroundColor: idx < currentIdx ? currentColor : colors.border }]} />
+                <View
+                  style={[
+                    styles.connector,
+                    {
+                      backgroundColor: (idx < currentIdx ? currentColor : colors.border) as any
+,
+                    },
+                  ]}
+                />
               )}
             </React.Fragment>
           );
         })}
       </View>
 
-      {role === "driver" && trip.studentName && (
-        <View style={[styles.infoRow, { borderColor: colors.border }]}>
+      {role === "driver" && (
+        <View style={[styles.infoRow, { borderTopColor: colors.border }]}>
           <FeatherIcon name="user" size={14} color={colors.mutedForeground} />
-          <Text style={[styles.infoText, { color: colors.foreground }]}>{trip.studentName}</Text>
+          <Text style={[styles.infoText, { color: colors.foreground }]}>{studentName}</Text>
           <FeatherIcon name="map-pin" size={14} color={colors.accent} />
-          <Text style={[styles.infoText, { color: colors.foreground }]} numberOfLines={1}>{destAddr}</Text>
+          <Text style={[styles.infoText, { color: colors.foreground }]} numberOfLines={1}>
+            {destAddr}
+          </Text>
         </View>
       )}
 
-      {role === "student" && trip.driverName && (
-        <View style={[styles.driverInfo, { borderColor: colors.border }]}>
+      {role === "student" && (
+        <View style={[styles.driverInfo, { borderTopColor: colors.border }]}>
           <View style={[styles.driverAvatar, { backgroundColor: colors.primary }]}>
             <Text style={[styles.driverAvatarText, { color: "#fff" }]}>
-              {trip.driverName.slice(0, 2)}
+              {driverName.charAt(0)}
             </Text>
           </View>
           <View style={styles.driverDetails}>
-            <Text style={[styles.driverName, { color: colors.foreground }]}>{trip.driverName}</Text>
-            <Text style={[styles.driverVehicle, { color: colors.mutedForeground }]}>{trip.driverVehicle}</Text>
+            <Text style={[styles.driverName, { color: colors.foreground }]}>{driverName}</Text>
+            <Text style={[styles.driverVehicle, { color: colors.mutedForeground }]}>
+              {driverVehicle}
+            </Text>
           </View>
           <View style={styles.driverRating}>
             <FeatherIcon name="star" size={12} color={colors.warning} />
             <Text style={[styles.ratingText, { color: colors.foreground }]}>
-              {Number(trip.driverRating ?? 5).toFixed(1)}
+              {driverRating}
             </Text>
           </View>
-          {trip.driverPhone && (
-            <TouchableOpacity
-              style={[styles.callBtn, { backgroundColor: colors.success + "15" }]}
-              onPress={handleCallDriver}
-            >
-              <FeatherIcon name="phone" size={16} color={colors.success} />
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
-
-      {role === "student" && trip.driverId && (trip.status === "accepted" || trip.status === "pickup") && (
-        <View style={styles.quickMessages}>
-          <TouchableOpacity 
-            style={[styles.msgChip, { borderColor: colors.border }]} 
-            onPress={() => handleQuickMessage("أنا في الموقع ✅")}
+          <TouchableOpacity
+            style={[styles.callBtn, { backgroundColor: colors.success + "15" }]}
+            onPress={handleCallDriver}
           >
-            <Text style={[styles.msgChipText, { color: colors.mutedForeground }]}>أنا في الموقع ✅</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.msgChip, { borderColor: colors.border }]} 
-            onPress={() => handleQuickMessage("أتأخر قليلاً ⏰")}
-          >
-            <Text style={[styles.msgChipText, { color: colors.mutedForeground }]}>أتأخر قليلاً ⏰</Text>
-          </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.msgChip, { borderColor: colors.border }]} 
-            onPress={() => handleQuickMessage("غيّر الموقع 📍")}
-          >
-            <Text style={[styles.msgChipText, { color: colors.mutedForeground }]}>غيّر الموقع 📍</Text>
+            <FeatherIcon name="phone" size={16} color={colors.success} />
           </TouchableOpacity>
         </View>
       )}
-
-      <View style={[styles.fareRow, { borderColor: colors.border }]}>
-        <FeatherIcon name="tag" size={13} color={colors.primary} />
-        <Text style={[styles.fareText, { color: colors.foreground }]}>
-          {(Number(trip.fare) / 1000).toFixed(0)}k دينار
-        </Text>
-      </View>
 
       <View style={styles.actions}>
-        {role === "driver" && trip.status !== "arrived" && trip.status !== "completed" && (
+        {role === "driver" && DRIVER_STATUS_ACTIONS[trip.status] && (
           <TouchableOpacity
-            style={[styles.primaryBtn, { backgroundColor: currentColor }]}
+            style={[styles.primaryBtn, { backgroundColor: currentColor as any }]}
             onPress={handleNextStatus}
             activeOpacity={0.85}
           >
             <FeatherIcon
-              name={trip.status === "accepted" ? "map-pin" : trip.status === "pickup" ? "play" : "flag"}
-              size={15}
+              name={
+                trip.status === "scheduled"
+                  ? "navigation"
+                  : trip.status === "driver_waiting"
+                  ? "play"
+                  : "flag"
+              }
+              size={16}
               color="#fff"
             />
             <Text style={styles.primaryBtnText}>
-              {trip.status === "accepted" ? "وصلت للاستلام" :
-               trip.status === "pickup" ? "بدء الرحلة" :
-               trip.status === "inprogress" ? "الوصول للجامعة" : "إنهاء الرحلة"}
+              {DRIVER_STATUS_ACTIONS[trip.status]}
             </Text>
           </TouchableOpacity>
         )}
-        {trip.status !== ("completed" as TripStatus) && trip.status !== ("cancelled" as TripStatus) && (
-          <TouchableOpacity
-            style={[styles.cancelBtn, { borderColor: colors.destructive }]}
-            onPress={handleCancel}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.cancelBtnText, { color: colors.destructive }]}>إلغاء الرحلة</Text>
+
+        {role === "student" && (
+          <TouchableOpacity onPress={handleShareTrip} style={[styles.secondaryBtn, { borderColor: colors.border }]}>
+            <FeatherIcon name="share-2" size={14} color={colors.primary} />
+            <Text style={[styles.secondaryBtnText, { color: colors.primary }]}>مشاركة الرحلة</Text>
           </TouchableOpacity>
         )}
+
+        <TouchableOpacity
+          style={[styles.cancelBtn, { borderColor: colors.destructive }]}
+          onPress={handleCancel}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.cancelBtnText, { color: colors.destructive }]}>إلغاء الرحلة</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -355,7 +428,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   completedText: {
-    fontSize: 16,
+    fontSize: 18,
     fontFamily: "Inter_700Bold",
   },
   routeRow: {
@@ -372,27 +445,23 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 20,
     gap: 6,
   },
   dot: {
-    width: 7,
-    height: 7,
+    width: 8,
+    height: 8,
     borderRadius: 4,
   },
-  shareBtnMini: {
-    marginLeft: "auto",
-    paddingLeft: 8,
-  },
   statusText: {
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: "Inter_600SemiBold",
   },
   etaText: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
   },
   stepsRow: {
     flexDirection: "row",
@@ -400,26 +469,25 @@ const styles = StyleSheet.create({
   },
   stepItem: {
     alignItems: "center",
-    width: 56,
+    width: 60,
   },
   stepCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     borderWidth: 2,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 4,
+    marginBottom: 5,
   },
   stepLabel: {
     fontSize: 9,
-    fontFamily: "Inter_400Regular",
     textAlign: "center",
   },
   connector: {
     flex: 1,
     height: 2,
-    marginTop: 13,
+    marginTop: 14,
   },
   infoRow: {
     flexDirection: "row",
@@ -441,14 +509,14 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   driverAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
   },
   driverAvatarText: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: "Inter_700Bold",
   },
   driverDetails: {
@@ -457,6 +525,7 @@ const styles = StyleSheet.create({
   driverName: {
     fontSize: 14,
     fontFamily: "Inter_600SemiBold",
+    marginBottom: 2,
   },
   driverVehicle: {
     fontSize: 12,
@@ -472,44 +541,19 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_600SemiBold",
   },
   callBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
   },
-  quickMessages: {
-    flexDirection: "row",
-    gap: 8,
-    paddingTop: 12,
-  },
-  msgChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  msgChipText: {
-    fontSize: 11,
-    fontFamily: "Inter_500Medium",
-  },
-  fareRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingTop: 10,
-    borderTopWidth: 1,
-  },
-  fareText: {
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
-  },
   actions: {
     gap: 8,
+    paddingTop: 4,
   },
   primaryBtn: {
-    borderRadius: 12,
-    paddingVertical: 13,
+    borderRadius: 14,
+    paddingVertical: 14,
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "center",
@@ -518,7 +562,20 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     color: "#fff",
     fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Inter_700Bold",
+  },
+  secondaryBtn: {
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 12,
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 8,
+  },
+  secondaryBtnText: {
+    fontSize: 14,
+    fontFamily: "Inter_500Medium",
   },
   cancelBtn: {
     borderRadius: 12,

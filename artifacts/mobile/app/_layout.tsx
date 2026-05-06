@@ -15,7 +15,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { AppProvider } from "@/context/AppContext";
+import { RootProvider } from "@/context";
 
 // ← تفعيل RTL العربي على مستوى التطبيق كاملاً
 I18nManager.allowRTL(true);
@@ -57,13 +57,13 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ErrorBoundary>
         <QueryClientProvider client={queryClient}>
-          <AppProvider>
+          <RootProvider>
             <GestureHandlerRootView style={{ flex: 1 }}>
               <KeyboardProvider>
                 <RootLayoutNav />
               </KeyboardProvider>
             </GestureHandlerRootView>
-          </AppProvider>
+          </RootProvider>
         </QueryClientProvider>
       </ErrorBoundary>
     </SafeAreaProvider>

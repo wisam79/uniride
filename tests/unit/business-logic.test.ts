@@ -4,22 +4,26 @@ import { z } from 'zod';
 // Schema definitions for validation
 const SubscriptionSchema = z.object({
   id: z.string().uuid(),
-  userId: z.string().uuid(),
-  routeId: z.string().uuid(),
+  student_id: z.string().uuid(),
+  driver_id: z.string().uuid(),
   status: z.enum(['pending', 'active', 'cancelled', 'expired']),
-  startDate: z.date(),
-  endDate: z.date(),
-  paymentStatus: z.enum(['pending', 'paid', 'failed', 'refunded']),
-  idempotencyKey: z.string().optional(),
+  start_date: z.date(),
+  end_date: z.date(),
+  monthly_fee: z.number().positive(),
+  commission_rate: z.number().positive(),
+}).refine(data => data.end_date > data.start_date, {
+  message: "End date must be after start date",
+  path: ["end_date"]
 });
 
-const RouteSchema = z.object({
+const DriverSchema = z.object({
   id: z.string().uuid(),
-  name: z.string().min(1).max(100),
-  seats: z.number().int().positive().max(60),
-  availableSeats: z.number().int().nonnegative(),
-  genderPreference: z.enum(['any', 'male', 'female']),
-  price: z.number().positive(),
+  user_id: z.string().uuid(),
+  vehicle_info: z.string().min(1).max(100),
+  capacity: z.number().int().positive().max(60),
+  available_seats: z.number().int().nonnegative(),
+  monthly_fee: z.number().positive(),
+  commission_rate: z.number().positive(),
 });
 
 describe('Unit Tests - Business Logic & Constraints', () => {
@@ -27,12 +31,13 @@ describe('Unit Tests - Business Logic & Constraints', () => {
     it('should accept valid subscription data', () => {
       const validSubscription = {
         id: '550e8400-e29b-41d4-a716-446655440000',
-        userId: '660e8400-e29b-41d4-a716-446655440001',
-        routeId: '770e8400-e29b-41d4-a716-446655440002',
+        student_id: '660e8400-e29b-41d4-a716-446655440001',
+        driver_id: '770e8400-e29b-41d4-a716-446655440002',
         status: 'active',
-        startDate: new Date(),
-        endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        paymentStatus: 'paid',
+        start_date: new Date(),
+        end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        monthly_fee: 90000,
+        commission_rate: 15,
       };
 
       const result = SubscriptionSchema.safeParse(validSubscription);
@@ -42,30 +47,32 @@ describe('Unit Tests - Business Logic & Constraints', () => {
     it('should reject subscription with end date before start date', () => {
       const invalidSubscription = {
         id: '550e8400-e29b-41d4-a716-446655440000',
-        userId: '660e8400-e29b-41d4-a716-446655440001',
-        routeId: '770e8400-e29b-41d4-a716-446655440002',
+        student_id: '660e8400-e29b-41d4-a716-446655440001',
+        driver_id: '770e8400-e29b-41d4-a716-446655440002',
         status: 'active',
-        startDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        endDate: new Date(),
-        paymentStatus: 'paid',
+        start_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        end_date: new Date(),
+        monthly_fee: 90000,
+        commission_rate: 15,
       };
 
       const result = SubscriptionSchema.safeParse(invalidSubscription);
       expect(result.success).toBe(false);
       if (!result.success) {
-        expect(result.error.errors.some(e => e.path.includes('endDate'))).toBe(true);
+        expect(result.error.errors.some(e => e.path.includes('end_date'))).toBe(true);
       }
     });
 
     it('should reject invalid status values', () => {
       const invalidSubscription = {
         id: '550e8400-e29b-41d4-a716-446655440000',
-        userId: '660e8400-e29b-41d4-a716-446655440001',
-        routeId: '770e8400-e29b-41d4-a716-446655440002',
+        student_id: '660e8400-e29b-41d4-a716-446655440001',
+        driver_id: '770e8400-e29b-41d4-a716-446655440002',
         status: 'invalid_status',
-        startDate: new Date(),
-        endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        paymentStatus: 'paid',
+        start_date: new Date(),
+        end_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        monthly_fee: 90000,
+        commission_rate: 15,
       };
 
       const result = SubscriptionSchema.safeParse(invalidSubscription);
@@ -73,101 +80,71 @@ describe('Unit Tests - Business Logic & Constraints', () => {
     });
   });
 
-  describe('Route Capacity Logic', () => {
+  describe('Driver Capacity Logic', () => {
     it('should calculate available seats correctly', () => {
-      const route = {
+      const driver = {
         id: '770e8400-e29b-41d4-a716-446655440002',
-        name: 'Baghdad University Route',
-        seats: 40,
-        availableSeats: 35,
-        genderPreference: 'any' as const,
-        price: 50000,
+        user_id: '660e8400-e29b-41d4-a716-446655440001',
+        vehicle_info: 'Toyota',
+        capacity: 40,
+        available_seats: 35,
+        monthly_fee: 90000,
+        commission_rate: 15,
       };
 
-      expect(route.availableSeats).toBeLessThanOrEqual(route.seats);
-      expect(route.availableSeats).toBeGreaterThanOrEqual(0);
+      expect(driver.available_seats).toBeLessThanOrEqual(driver.capacity);
+      expect(driver.available_seats).toBeGreaterThanOrEqual(0);
     });
 
-    it('should reject routes with negative seats', () => {
-      const invalidRoute = {
+    it('should reject drivers with negative seats', () => {
+      const invalidDriver = {
         id: '770e8400-e29b-41d4-a716-446655440002',
-        name: 'Invalid Route',
-        seats: -5,
-        availableSeats: 10,
-        genderPreference: 'any' as const,
-        price: 50000,
+        user_id: '660e8400-e29b-41d4-a716-446655440001',
+        vehicle_info: 'Toyota',
+        capacity: -5,
+        available_seats: 10,
+        monthly_fee: 90000,
+        commission_rate: 15,
       };
 
-      const result = RouteSchema.safeParse(invalidRoute);
+      const result = DriverSchema.safeParse(invalidDriver);
       expect(result.success).toBe(false);
     });
 
-    it('should reject routes with more than 60 seats', () => {
-      const invalidRoute = {
+    it('should reject drivers with more than 60 seats', () => {
+      const invalidDriver = {
         id: '770e8400-e29b-41d4-a716-446655440002',
-        name: 'Too Large Route',
-        seats: 100,
-        availableSeats: 80,
-        genderPreference: 'any' as const,
-        price: 50000,
+        user_id: '660e8400-e29b-41d4-a716-446655440001',
+        vehicle_info: 'Bus',
+        capacity: 100,
+        available_seats: 80,
+        monthly_fee: 90000,
+        commission_rate: 15,
       };
 
-      const result = RouteSchema.safeParse(invalidRoute);
+      const result = DriverSchema.safeParse(invalidDriver);
       expect(result.success).toBe(false);
     });
 
-    it('should reject routes where availableSeats > total seats', () => {
-      const route = {
+    it('should reject drivers where available_seats > capacity', () => {
+      const driver = {
         id: '770e8400-e29b-41d4-a716-446655440002',
-        name: 'Invalid Capacity Route',
-        seats: 40,
-        availableSeats: 50,
-        genderPreference: 'any' as const,
-        price: 50000,
+        user_id: '660e8400-e29b-41d4-a716-446655440001',
+        vehicle_info: 'Toyota',
+        capacity: 40,
+        available_seats: 50,
+        monthly_fee: 90000,
+        commission_rate: 15,
       };
 
-      // This should be caught by business logic, not schema
-      const result = RouteSchema.safeParse(route);
-      expect(result.success).toBe(true); // Schema passes
+      const result = DriverSchema.safeParse(driver);
+      expect(result.success).toBe(true); 
       
-      // But business logic should fail
-      expect(route.availableSeats <= route.seats).toBe(false);
+      expect(driver.available_seats <= driver.capacity).toBe(false);
     });
   });
 
-  describe('Gender Preference Validation', () => {
-    it('should accept valid gender preferences', () => {
-      const validPreferences = ['any', 'male', 'female'];
-      
-      validPreferences.forEach(pref => {
-        const route = {
-          id: '770e8400-e29b-41d4-a716-446655440002',
-          name: 'Test Route',
-          seats: 40,
-          availableSeats: 30,
-          genderPreference: pref as 'any' | 'male' | 'female',
-          price: 50000,
-        };
-        
-        const result = RouteSchema.safeParse(route);
-        expect(result.success).toBe(true);
-      });
-    });
 
-    it('should reject invalid gender preferences', () => {
-      const invalidRoute = {
-        id: '770e8400-e29b-41d4-a716-446655440002',
-        name: 'Invalid Gender Route',
-        seats: 40,
-        availableSeats: 30,
-        genderPreference: 'invalid',
-        price: 50000,
-      };
-
-      const result = RouteSchema.safeParse(invalidRoute);
-      expect(result.success).toBe(false);
-    });
-  });
 
   describe('Payment Status Transitions', () => {
     const validTransitions: Record<string, string[]> = {

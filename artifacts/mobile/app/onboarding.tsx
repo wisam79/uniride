@@ -18,10 +18,11 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { UserRole, useApp } from "@/context/AppContext";
+import { useAuth, type UserRole } from "@/context";
 import { useColors } from "@/hooks/useColors";
+import { IRAQI_UNIVERSITIES } from "@/lib/utils";
 import { api } from "@/lib/api";
-import { IRAQI_UNIVERSITIES } from "@/lib/universities";
+import { FontAwesome } from "@expo/vector-icons";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -41,14 +42,14 @@ const OTP_RESEND_SECONDS = 60;
 export default function Onboarding() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { login, isLoading } = useApp();
+  const { signInWithEmail, signInWithGoogle, verifyOtp: verifyOtpCode, registerProfile, updateProfile, user, isAuthenticated, isLoading } = useAuth();
 
   const [screen, setScreen] = useState<Screen>("welcome");
   const [role, setRole] = useState<UserRole>("student");
   const [authMode, setAuthMode] = useState<AuthMode>("login");
 
   const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [university, setUniversity] = useState("");
   const [vehicleType, setVehicleType] = useState("");
   const [vehiclePlate, setVehiclePlate] = useState("");
@@ -64,7 +65,7 @@ export default function Onboarding() {
   const [loading, setLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [error, setError] = useState("");
-  const [fieldErrors, setFieldErrors] = useState<{ phone?: string; name?: string }>({});
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; name?: string }>({});
 
   const logoAnim = useRef(new Animated.Value(0)).current;
   const featuresAnims = useRef([0, 0, 0, 0].map(() => new Animated.Value(0))).current;
@@ -163,13 +164,13 @@ export default function Onboarding() {
   }
 
   async function handleSendOtp() {
-    const newErrors: { phone?: string; name?: string } = {};
-    const trimPhone = phone.trim();
+    const newErrors: { email?: string; name?: string } = {};
+    const trimEmail = email.trim();
 
-    if (!trimPhone) {
-      newErrors.phone = "رقم الهاتف مطلوب";
-    } else if (!/^07\d{9}$/.test(trimPhone)) {
-      newErrors.phone = "يجب أن يبدأ بـ 07 ويكون 11 رقماً";
+    if (!trimEmail) {
+      newErrors.email = "البريد الإلكتروني مطلوب";
+    } else if (!/^\S+@\S+\.\S+$/.test(trimEmail)) {
+      newErrors.email = "صيغة البريد الإلكتروني غير صحيحة";
     }
 
     if (authMode === "register" && !name.trim()) {
@@ -190,9 +191,9 @@ export default function Onboarding() {
     setLoading(true);
 
     try {
-      const res = await api.post<{ devCode?: string }>("/auth/send-otp", { phone: trimPhone });
+      await signInWithEmail(trimEmail);
       setOtpDigits(["", "", "", "", "", ""]);
-      setDevCode(res.devCode ?? null);
+      setDevCode(null);
       startResendTimer();
       setScreen("otp");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -213,42 +214,26 @@ export default function Onboarding() {
       return;
     }
 
-    setError("");
-    setLoading(true);
+     setError("");
+     setLoading(true);
 
-    try {
-      const payload: Record<string, unknown> = {
-        phone: phone.trim(),
-        code,
-      };
+     try {
+       await verifyOtpCode(email.trim(), code);
 
-      if (authMode === "register") {
-        payload.name = name.trim();
-        payload.role = role;
-        payload.university = role === "student" ? (university.trim() || "جامعة بغداد") : undefined;
-        payload.vehicleType = role === "driver" ? (vehicleType.trim() || undefined) : undefined;
-        payload.vehiclePlate = role === "driver" ? (vehiclePlate.trim() || undefined) : undefined;
-        payload.vehicleColor = role === "driver" ? vehicleColor : undefined;
-      }
+       if (authMode === "register") {
+         await registerProfile({
+           fullName: name.trim(),
+           role,
+           institutionId: role === "student" ? (university.trim() || undefined) : undefined,
+           vehicleInfo: role === "driver" ? `${vehicleType.trim() || ""} ${vehicleColor} ${vehiclePlate.trim() || ""}`.trim() : undefined,
+         });
+       }
 
-      const data = await api.post<{ token?: string; user?: any; verified?: boolean; isNewUser?: boolean }>(
-        "/auth/verify-otp",
-        payload
-      );
-
-      if (data.verified && data.isNewUser && !data.token) {
-        setError("حدث خطأ، أعد المحاولة");
-        return;
-      }
-
-      if (data.token && data.user) {
-        await login(data.user, data.token);
-        setShowSuccess(true);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        setTimeout(() => router.replace("/(tabs)"), 1500);
-      }
+      setShowSuccess(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setTimeout(() => router.replace("/(tabs)"), 1500);
     } catch (err: any) {
-      const msg = err?.response?.data?.error ?? err.message ?? "رمز التحقق غير صحيح";
+      const msg = err?.message ?? "رمز التحقق غير صحيح";
       setError(msg);
       shakeOtp();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -262,14 +247,27 @@ export default function Onboarding() {
     setLoading(true);
     setError("");
     try {
-      const res = await api.post<{ devCode?: string }>("/auth/send-otp", { phone: phone.trim() });
+      await signInWithEmail(email.trim());
       setOtpDigits(["", "", "", "", "", ""]);
-      setDevCode(res.devCode ?? null);
+      setDevCode(null);
       startResendTimer();
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       setTimeout(() => otpRefs.current[0]?.focus(), 200);
     } catch (err: any) {
       setError(err?.response?.data?.error ?? "فشل إعادة الإرسال");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleGoogleSignIn() {
+    setLoading(true);
+    try {
+      await signInWithGoogle();
+      setShowSuccess(true);
+      setTimeout(() => router.replace("/(tabs)"), 1500);
+    } catch (err: any) {
+      setError("فشل تسجيل الدخول عبر Google");
     } finally {
       setLoading(false);
     }
@@ -308,29 +306,22 @@ export default function Onboarding() {
     setLoading(true);
     setError("");
     try {
-      const payload: Record<string, unknown> = { phone: phone.trim(), code };
+      await verifyOtpCode(email.trim(), code);
+
       if (authMode === "register") {
-        payload.name = name.trim();
-        payload.role = role;
-        payload.university = role === "student" ? (university.trim() || "جامعة بغداد") : undefined;
-        payload.vehicleType = role === "driver" ? (vehicleType.trim() || undefined) : undefined;
-        payload.vehiclePlate = role === "driver" ? (vehiclePlate.trim() || undefined) : undefined;
-        payload.vehicleColor = role === "driver" ? vehicleColor : undefined;
+        await registerProfile({
+          fullName: name.trim(),
+          role,
+          institutionId: role === "student" ? (university.trim() || undefined) : undefined,
+          vehicleInfo: role === "driver" ? `${vehicleType.trim() || ""} ${vehicleColor} ${vehiclePlate.trim() || ""}`.trim() : undefined,
+        });
       }
 
-      const data = await api.post<{ token?: string; user?: any; verified?: boolean; isNewUser?: boolean }>(
-        "/auth/verify-otp",
-        payload
-      );
-
-      if (data.token && data.user) {
-        await login(data.user, data.token);
-        setShowSuccess(true);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        setTimeout(() => router.replace("/(tabs)"), 1500);
-      }
+      setShowSuccess(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setTimeout(() => router.replace("/(tabs)"), 1500);
     } catch (err: any) {
-      const msg = err?.response?.data?.error ?? "رمز التحقق غير صحيح";
+      const msg = err?.message ?? "رمز التحقق غير صحيح";
       setError(msg);
       shakeOtp();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -484,19 +475,19 @@ export default function Onboarding() {
           <View style={styles.authHeaderContent}>
             <Text style={styles.authTitle}>أدخل رمز التحقق</Text>
             <Text style={styles.authSubtitle}>
-              تم إرسال رمز مكوّن من 6 أرقام إلى واتساب{"\n"}
-              <Text style={{ color: "#FF6B35", fontFamily: "Inter_700Bold" }}>{phone}</Text>
+              تم إرسال رمز مكوّن من 6 أرقام إلى البريد الإلكتروني{"\n"}
+              <Text style={{ color: "#FF6B35", fontFamily: "Inter_700Bold" }}>{email}</Text>
             </Text>
           </View>
         </LinearGradient>
 
         <ScrollView contentContainerStyle={[styles.authFormContent, { paddingBottom: insets.bottom + 40 }]} keyboardShouldPersistTaps="handled">
           <View style={styles.otpIllustration}>
-            <View style={[styles.otpIconCircle, { backgroundColor: "#25D366" + "20" }]}>
-              <FeatherIcon name="message-circle" size={36} color="#25D366" />
+            <View style={[styles.otpIconCircle, { backgroundColor: "#FF6B35" + "20" }]}>
+              <FeatherIcon name="mail" size={36} color="#FF6B35" />
             </View>
             <Text style={[styles.otpHint, { color: colors.mutedForeground }]}>
-              {devCode ? "الرمز يظهر أدناه — اضغط عليه للتعبئة التلقائية" : "تحقق من واتساب وأدخل الرمز هنا"}
+              {devCode ? "الرمز يظهر أدناه — اضغط عليه للتعبئة التلقائية" : "تحقق من بريدك الإلكتروني وأدخل الرمز هنا"}
             </Text>
           </View>
 
@@ -516,7 +507,7 @@ export default function Onboarding() {
                 <Text style={styles.devCodeLabel}>وضع التطوير — اضغط للتعبئة التلقائية</Text>
               </View>
               <Text style={styles.devCodeValue}>{devCode}</Text>
-              <Text style={styles.devCodeSub}>سيختفي هذا عند تفعيل واتساب</Text>
+              <Text style={styles.devCodeSub}>سيختفي هذا عند تفعيل البريد الإلكتروني</Text>
             </TouchableOpacity>
           ) : null}
 
@@ -573,15 +564,15 @@ export default function Onboarding() {
               </Text>
             ) : (
               <TouchableOpacity onPress={handleResendOtp} disabled={loading}>
-                <Text style={[styles.resendBtn, { color: "#25D366" }]}>
-                  ⟳ إعادة إرسال الرمز عبر واتساب
+                <Text style={[styles.resendBtn, { color: colors.primary }]}>
+                  ⟳ إعادة إرسال الرمز عبر البريد الإلكتروني
                 </Text>
               </TouchableOpacity>
             )}
           </View>
 
-          <View style={[styles.whatsappNote, { backgroundColor: "#25D36615", borderColor: "#25D36630" }]}>
-            <FeatherIcon name="info" size={14} color="#25D366" />
+          <View style={[styles.whatsappNote, { backgroundColor: colors.primary + "15", borderColor: colors.primary + "30" }]}>
+            <FeatherIcon name="info" size={14} color={colors.primary} />
             <Text style={[styles.whatsappNoteText, { color: colors.mutedForeground }]}>
               الرمز صالح لمدة 5 دقائق فقط ولا يمكن استخدامه مرتين
             </Text>
@@ -641,19 +632,14 @@ export default function Onboarding() {
         )}
 
         <View style={styles.field}>
-          <Text style={[styles.label, { color: colors.mutedForeground }]}>رقم الهاتف</Text>
-          <View style={styles.phoneInputContainer}>
-            <TextInput
-              style={[styles.input, styles.phoneInput, { backgroundColor: colors.card, borderColor: fieldErrors.phone ? "#EF4444" : colors.border, color: colors.foreground }]}
-              value={phone} onChangeText={setPhone}
-              placeholder="07XX XXX XXXX" placeholderTextColor={colors.mutedForeground}
-              keyboardType="phone-pad" textAlign="right"
-            />
-            <View style={styles.phonePrefix}>
-              <Text style={styles.phonePrefixText}>+964 🇮🇶</Text>
-            </View>
-          </View>
-          {fieldErrors.phone && <Text style={styles.fieldError}>{fieldErrors.phone}</Text>}
+          <Text style={[styles.label, { color: colors.mutedForeground }]}>البريد الإلكتروني</Text>
+          <TextInput
+            style={[styles.input, { backgroundColor: colors.card, borderColor: fieldErrors.email ? "#EF4444" : colors.border, color: colors.foreground }]}
+            value={email} onChangeText={setEmail}
+            placeholder="student@example.com" placeholderTextColor={colors.mutedForeground}
+            keyboardType="email-address" textAlign="right" autoCapitalize="none"
+          />
+          {fieldErrors.email && <Text style={styles.fieldError}>{fieldErrors.email}</Text>}
         </View>
 
         {authMode === "register" && role === "student" && (
@@ -702,20 +688,36 @@ export default function Onboarding() {
           </>
         )}
 
-        <View style={[styles.whatsappNote, { backgroundColor: "#25D36615", borderColor: "#25D36630", marginBottom: 4 }]}>
-          <FeatherIcon name="message-circle" size={14} color="#25D366" />
+        <View style={[styles.whatsappNote, { backgroundColor: colors.primary + "15", borderColor: colors.primary + "30", marginBottom: 4 }]}>
+          <FeatherIcon name="mail" size={14} color={colors.primary} />
           <Text style={[styles.whatsappNoteText, { color: colors.mutedForeground }]}>
-            سيتم إرسال رمز تحقق عبر واتساب لهذا الرقم
+            سيتم إرسال رمز تحقق عبر البريد الإلكتروني
           </Text>
         </View>
 
         <TouchableOpacity style={[styles.authBtn, { backgroundColor: colors.primary, opacity: loading ? 0.7 : 1 }]} onPress={handleSendOtp} disabled={loading} activeOpacity={0.85}>
           {loading ? <LoadingText /> : (
             <>
-              <Text style={styles.authBtnText}>إرسال رمز واتساب</Text>
+              <Text style={styles.authBtnText}>إرسال رمز التحقق</Text>
               <FeatherIcon name="send" size={18} color="#fff" />
             </>
           )}
+        </TouchableOpacity>
+
+        <View style={styles.divider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>أو</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        <TouchableOpacity 
+          style={[styles.authBtn, styles.googleBtn]} 
+          onPress={handleGoogleSignIn} 
+          disabled={loading} 
+          activeOpacity={0.85}
+        >
+          <Text style={styles.googleBtnText}>المتابعة باستخدام Google</Text>
+          <FontAwesome name="google" size={20} color="#DB4437" />
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -818,4 +820,9 @@ const styles = StyleSheet.create({
   resendBtn: { fontSize: 14, fontFamily: "Inter_600SemiBold", textAlign: "center", paddingVertical: 8 },
   whatsappNote: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 10, borderWidth: 1 },
   whatsappNoteText: { fontSize: 12, fontFamily: "Inter_400Regular", flex: 1, textAlign: "right" },
+  divider: { flexDirection: "row", alignItems: "center", marginVertical: 12 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: "#E2E8F0" },
+  dividerText: { marginHorizontal: 12, fontSize: 13, fontFamily: "Inter_500Medium", color: "#64748B" },
+  googleBtn: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E2E8F0", paddingVertical: 14 },
+  googleBtnText: { color: "#334155", fontSize: 16, fontFamily: "Inter_600SemiBold" },
 });

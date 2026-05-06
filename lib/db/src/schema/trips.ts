@@ -1,35 +1,29 @@
-import { pgTable, uuid, text, numeric, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, integer, timestamp, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
-import { usersTable } from "./users";
+import { driversTable } from "./drivers";
+import { subscriptionsTable } from "./subscriptions";
+import { profilesTable } from "./users";
 
 export const tripsTable = pgTable("trips", {
   id: uuid("id").primaryKey().defaultRandom(),
-  studentId: uuid("student_id").notNull().references(() => usersTable.id),
-  studentName: text("student_name").notNull(),
-  driverId: uuid("driver_id").references(() => usersTable.id),
-  driverName: text("driver_name"),
-  driverPhone: text("driver_phone"),
-  driverVehicle: text("driver_vehicle"),
-  driverRating: numeric("driver_rating", { precision: 3, scale: 1 }),
-  originLat: numeric("origin_lat", { precision: 10, scale: 6 }).notNull(),
-  originLng: numeric("origin_lng", { precision: 10, scale: 6 }).notNull(),
-  originAddress: text("origin_address").notNull(),
-  destLat: numeric("dest_lat", { precision: 10, scale: 6 }).notNull(),
-  destLng: numeric("dest_lng", { precision: 10, scale: 6 }).notNull(),
-  destAddress: text("dest_address").notNull(),
-  status: text("status", {
-    enum: ["waiting", "accepted", "pickup", "inprogress", "arrived", "completed", "cancelled"],
-  }).notNull().default("waiting"),
-  startTime: timestamp("start_time").defaultNow().notNull(),
-  endTime: timestamp("end_time"),
-  fare: numeric("fare", { precision: 10, scale: 0 }).notNull().default("75000"),
-  driverShare: numeric("driver_share", { precision: 10, scale: 0 }),
-  appCommission: numeric("app_commission", { precision: 10, scale: 0 }),
-  distance: numeric("distance", { precision: 6, scale: 2 }),
-  notes: text("notes"),
+  driverId: uuid("driver_id").notNull().references(() => driversTable.id, { onDelete: "cascade" }),
+  subscriptionId: uuid("subscription_id").references(() => subscriptionsTable.id, { onDelete: "set null" }),
+  direction: text("direction", { enum: ["go", "return"] }).notNull(),
+  tripDate: date("trip_date").notNull().defaultNow(),
+  status: text("status", { enum: ["scheduled", "driver_waiting", "in_transit", "completed", "absent", "cancelled"] }).notNull().default("scheduled"),
+  startedAt: timestamp("started_at"),
+  endedAt: timestamp("ended_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
-export const insertTripSchema = createInsertSchema(tripsTable).omit({ id: true, startTime: true });
-export type InsertTrip = z.infer<typeof insertTripSchema>;
+export const tripStudentsTable = pgTable("trip_students", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tripId: uuid("trip_id").notNull().references(() => tripsTable.id, { onDelete: "cascade" }),
+  studentId: uuid("student_id").notNull().references(() => profilesTable.id, { onDelete: "cascade" }),
+  status: text("status", { enum: ["waiting", "picked_up", "dropped_off", "absent"] }).notNull().default("waiting"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertTripSchema = createInsertSchema(tripsTable).omit({ id: true, createdAt: true });
 export type Trip = typeof tripsTable.$inferSelect;
+export type TripStudent = typeof tripStudentsTable.$inferSelect;

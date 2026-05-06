@@ -1,35 +1,37 @@
-import React, { Component, ComponentType, PropsWithChildren } from "react";
-
-import { ErrorFallback, ErrorFallbackProps } from "@/components/ErrorFallback";
+import React, { Component, ComponentType, PropsWithChildren, ReactNode } from "react";
+import { ErrorFallback, type ErrorFallbackProps } from "./ErrorFallback";
 
 export type ErrorBoundaryProps = PropsWithChildren<{
   FallbackComponent?: ComponentType<ErrorFallbackProps>;
+  fallback?: ReactNode;
   onError?: (error: Error, stackTrace: string) => void;
 }>;
 
-type ErrorBoundaryState = { error: Error | null };
+type ErrorBoundaryState = {
+  error: Error | null;
+  errorCount: number;
+};
 
-/**
- * This is a special case for for using the class components. Error boundaries must be class components because React only provides error boundary functionality through lifecycle methods (componentDidCatch and getDerivedStateFromError) which are not available in functional components.
- * https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary
- */
-export class ErrorBoundary extends Component<
-  ErrorBoundaryProps,
-  ErrorBoundaryState
-> {
-  state: ErrorBoundaryState = { error: null };
+export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { error: null, errorCount: 0 };
 
-  static defaultProps: {
-    FallbackComponent: ComponentType<ErrorFallbackProps>;
-  } = {
+  static defaultProps = {
     FallbackComponent: ErrorFallback,
   };
 
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+  static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     return { error };
   }
 
   componentDidCatch(error: Error, info: { componentStack: string }): void {
+    const timestamp = new Date().toISOString();
+
+    console.error(
+      `[ErrorBoundary] ${timestamp} ${error.name}: ${error.message}\n${error.stack ?? ""}\nComponent Stack: ${info.componentStack}`
+    );
+
+    this.setState((prev) => ({ errorCount: prev.errorCount + 1 }));
+
     if (typeof this.props.onError === "function") {
       this.props.onError(error, info.componentStack);
     }
@@ -39,16 +41,37 @@ export class ErrorBoundary extends Component<
     this.setState({ error: null });
   };
 
-  render() {
-    const { FallbackComponent } = this.props;
+  handleResetApp = async (): Promise<void> => {
+    try {
+      const { reloadAppAsync } = require("expo");
+      await reloadAppAsync();
+    } catch {
+      this.resetError();
+    }
+  };
 
-    return this.state.error && FallbackComponent ? (
-      <FallbackComponent
-        error={this.state.error}
-        resetError={this.resetError}
-      />
-    ) : (
-      this.props.children
-    );
+  render() {
+    const { FallbackComponent, fallback, children } = this.props;
+    const { error, errorCount } = this.state;
+
+    if (error) {
+      if (fallback) {
+        return <>{fallback}</>;
+      }
+
+      if (FallbackComponent) {
+        const Comp = FallbackComponent;
+        return (
+          <Comp
+            error={error}
+            resetError={this.resetError}
+            errorCount={errorCount}
+            onResetApp={this.handleResetApp}
+          />
+        );
+      }
+    }
+
+    return children;
   }
 }

@@ -1,5 +1,3 @@
-import FeatherIcon from "@/components/FeatherIcon";
-import { reloadAppAsync } from "expo";
 import React, { useState } from "react";
 import {
   Modal,
@@ -11,28 +9,25 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
+import FeatherIcon from "@/components/FeatherIcon";
 import { useColors } from "@/hooks/useColors";
-
-export type ErrorFallbackProps = {
+export interface ErrorFallbackProps {
   error: Error;
   resetError: () => void;
-};
+  errorCount: number;
+  onResetApp: () => Promise<void>;
+}
 
-export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
+export function ErrorFallback({ error, resetError, errorCount, onResetApp }: ErrorFallbackProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-
   const [isModalVisible, setIsModalVisible] = useState(false);
 
-  const handleRestart = async () => {
-    try {
-      await reloadAppAsync();
-    } catch (restartError) {
-      console.error("Failed to restart app:", restartError);
-      resetError();
-    }
-  };
+  const monoFont = Platform.select({
+    ios: "Menlo",
+    android: "monospace",
+    default: "monospace",
+  });
 
   const formatErrorDetails = (): string => {
     let details = `Error: ${error.message}\n\n`;
@@ -42,10 +37,13 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
     return details;
   };
 
-  const monoFont = Platform.select({
-    ios: "Menlo",
-    android: "monospace",
-    default: "monospace",
+  const timestamp = new Date().toLocaleString("ar-IQ", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
   });
 
   return (
@@ -53,7 +51,7 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
       {__DEV__ ? (
         <Pressable
           onPress={() => setIsModalVisible(true)}
-          accessibilityLabel="View error details"
+          accessibilityLabel="عرض تفاصيل الخطأ"
           accessibilityRole="button"
           style={({ pressed }) => [
             styles.topButton,
@@ -69,16 +67,22 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
       ) : null}
 
       <View style={styles.content}>
-        <Text style={[styles.title, { color: colors.foreground }]}>
-          Something went wrong
+        <FeatherIcon name="alert-triangle" size={48} color={colors.primary} />
+        <Text style={[styles.title, { color: colors.foreground }]}>عذراً، حدث خطأ غير متوقع</Text>
+        <Text style={[styles.message, { color: colors.mutedForeground }]}>
+          يمكنك إعادة المحاولة أو إعادة تشغيل التطبيق.
         </Text>
 
-        <Text style={[styles.message, { color: colors.mutedForeground }]}>
-          Please reload the app to continue.
-        </Text>
+        {__DEV__ ? (
+          <View style={[styles.errorPreview, { backgroundColor: colors.card }]}>
+            <Text style={[styles.errorPreviewText, { color: colors.mutedForeground }]} numberOfLines={2}>
+              {error.message}
+            </Text>
+          </View>
+        ) : null}
 
         <Pressable
-          onPress={handleRestart}
+          onPress={resetError}
           style={({ pressed }) => [
             styles.button,
             {
@@ -88,15 +92,31 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
             },
           ]}
         >
-          <Text
-            style={[
-              styles.buttonText,
-              { color: colors.primaryForeground },
-            ]}
-          >
-            Try Again
+          <FeatherIcon name="refresh-cw" size={16} color={colors.primaryForeground} />
+          <Text style={[styles.buttonText, { color: colors.primaryForeground }]}>
+            إعادة المحاولة
           </Text>
         </Pressable>
+
+        {errorCount >= 3 ? (
+          <Pressable
+            onPress={onResetApp}
+            style={({ pressed }) => [
+              styles.button,
+              styles.resetButton,
+              {
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                opacity: pressed ? 0.8 : 1,
+              },
+            ]}
+          >
+            <FeatherIcon name="power" size={16} color={colors.foreground} />
+            <Text style={[styles.buttonText, { color: colors.foreground }]}>
+              إعادة تشغيل التطبيق
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {__DEV__ ? (
@@ -107,29 +127,21 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
           onRequestClose={() => setIsModalVisible(false)}
         >
           <View style={styles.modalOverlay}>
-            <View
-              style={[
-                styles.modalContainer,
-                { backgroundColor: colors.background },
-              ]}
-            >
-              <View
-                style={[
-                  styles.modalHeader,
-                  { borderBottomColor: colors.border },
-                ]}
-              >
-                <Text style={[styles.modalTitle, { color: colors.foreground }]}>
-                  Error Details
-                </Text>
+            <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+              <View style={[styles.modalHeader, { borderBottomColor: colors.border }]}>
+                <View>
+                  <Text style={[styles.modalTitle, { color: colors.foreground }]}>
+                    تفاصيل الخطأ
+                  </Text>
+                  <Text style={[styles.timestamp, { color: colors.mutedForeground }]}>
+                    {timestamp}
+                  </Text>
+                </View>
                 <Pressable
                   onPress={() => setIsModalVisible(false)}
-                  accessibilityLabel="Close error details"
+                  accessibilityLabel="إغلاق"
                   accessibilityRole="button"
-                  style={({ pressed }) => [
-                    styles.closeButton,
-                    { opacity: pressed ? 0.6 : 1 },
-                  ]}
+                  style={({ pressed }) => [styles.closeButton, { opacity: pressed ? 0.6 : 1 }]}
                 >
                   <FeatherIcon name="x" size={24} color={colors.foreground} />
                 </Pressable>
@@ -137,28 +149,11 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
 
               <ScrollView
                 style={styles.modalScrollView}
-                contentContainerStyle={[
-                  styles.modalScrollContent,
-                  { paddingBottom: insets.bottom + 16 },
-                ]}
+                contentContainerStyle={[styles.modalScrollContent, { paddingBottom: insets.bottom + 16 }]}
                 showsVerticalScrollIndicator
               >
-                <View
-                  style={[
-                    styles.errorContainer,
-                    { backgroundColor: colors.card },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.errorText,
-                      {
-                        color: colors.foreground,
-                        fontFamily: monoFont,
-                      },
-                    ]}
-                    selectable
-                  >
+                <View style={[styles.errorContainer, { backgroundColor: colors.card }]}>
+                  <Text style={[styles.errorText, { color: colors.foreground, fontFamily: monoFont }]} selectable>
                     {formatErrorDetails()}
                   </Text>
                 </View>
@@ -188,15 +183,24 @@ const styles = StyleSheet.create({
     maxWidth: 600,
   },
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: "700",
     textAlign: "center",
-    lineHeight: 40,
+    lineHeight: 36,
   },
   message: {
     fontSize: 16,
     textAlign: "center",
     lineHeight: 24,
+  },
+  errorPreview: {
+    width: "100%",
+    padding: 12,
+    borderRadius: 8,
+  },
+  errorPreviewText: {
+    fontSize: 13,
+    textAlign: "center",
   },
   topButton: {
     position: "absolute",
@@ -214,14 +218,20 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 24,
     minWidth: 200,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+  },
+  resetButton: {
+    borderWidth: 1,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   buttonText: {
     fontWeight: "600",
@@ -251,6 +261,10 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: "600",
+  },
+  timestamp: {
+    fontSize: 12,
+    marginTop: 2,
   },
   closeButton: {
     width: 44,

@@ -3,7 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useColors } from "@/hooks/useColors";
-import { formatIQD } from "@/lib/universities";
+import { formatIQD } from "@/lib/utils";
 
 export interface Route {
   id: string;

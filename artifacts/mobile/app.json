@@ -1,57 +1,35 @@
 {
   "expo": {
-    "name": "UniRide Iraq",
-    "slug": "mobile",
+    "name": "UniRide",
+    "slug": "uniride",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "mobile",
-    "userInterfaceStyle": "automatic",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "scheme": "uniride",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/splash.png",
-      "resizeMode": "cover",
-      "backgroundColor": "#0D2847"
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1A56DB"
     },
     "ios": {
-      "supportsTablet": false,
-      "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "يونيرايد يحتاج إلى موقعك لتتبع الرحلة وعرض السائقين القريبين.",
-        "NSLocationAlwaysUsageDescription": "يونيرايد يحتاج إلى موقعك لتتبع رحلتك في الخلفية.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "يونيرايد يحتاج إلى موقعك لتتبع الرحلة وعرض السائقين القريبين."
-      }
+      "supportsTablet": true,
+      "bundleIdentifier": "iq.uniride.app"
     },
     "android": {
-      "permissions": [
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_BACKGROUND_LOCATION"
-      ]
-    },
-    "web": {
-      "favicon": "./assets/images/icon.png"
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1A56DB"
+      },
+      "package": "iq.uniride.app"
     },
     "plugins": [
-      [
-        "expo-router",
-        {
-          "origin": "https://replit.com/"
-        }
-      ],
-      "expo-font",
-      "expo-web-browser",
-      [
-        "expo-location",
-        {
-          "locationAlwaysAndWhenInUsePermission": "يونيرايد يستخدم موقعك لتتبع الرحلة.",
-          "locationAlwaysPermission": "يونيرايد يستخدم موقعك لتتبع الرحلة في الخلفية.",
-          "locationWhenInUsePermission": "يونيرايد يستخدم موقعك لعرض السائقين القريبين."
-        }
-      ]
+      "expo-router"
     ],
-    "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+    "extra": {
+      "supabaseUrl": "https://pfjsqgqrxnrlrfnchnqf.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBmanNxZ3FyeG5ybHJmbmNobnFmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDYyOTIzOTgsImV4cCI6MjA2MTg2ODM5OH0.non_prod_key"
     }
   }
 }

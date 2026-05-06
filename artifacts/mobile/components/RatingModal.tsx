@@ -14,8 +14,8 @@ import {
 } from "react-native";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
-import { api } from "@/lib/api";
 import FeatherIcon from "@/components/FeatherIcon";
+import { supabase } from "@/lib/supabase";
 
 interface RatingModalProps {
   visible: boolean;
@@ -95,15 +95,25 @@ export default function RatingModal({
     if (rating === 0) return;
     setLoading(true);
     try {
-      await api.post("/ratings", {
-        tripId,
+      // Fetch the driver ID from the trip
+      const { data: trip } = await supabase.from('trips').select('driver_id').eq('id', tripId).single();
+      if (!trip) throw new Error("Trip not found");
+
+      const { data: authData } = await supabase.auth.getSession();
+      const userId = authData.session?.user?.id;
+      if (!userId) throw new Error("User not authenticated");
+
+      await supabase.from('reviews').insert({
+        from_user_id: userId,
+        to_user_id: trip.driver_id,
         rating,
         comment,
       });
+
       onSubmitted?.();
       onClose();
     } catch (error) {
-      // Error handled by api.ts but we should stop loading
+      console.warn("Failed to submit rating", error);
     } finally {
       setLoading(false);
     }

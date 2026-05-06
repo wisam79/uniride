@@ -1,29 +1,29 @@
 import React from "react";
 import { View, Text, StyleSheet, Image } from "react-native";
-import { Trip } from "@/context/AppContext";
+import { TripData } from "@/context";
 import { useColors } from "@/hooks/useColors";
 import FeatherIcon from "@/components/FeatherIcon";
 
 interface TripTimelineProps {
-  trip: Trip;
+  trip: TripData;
 }
 
 export default function TripTimeline({ trip }: TripTimelineProps) {
   const colors = useColors();
 
   const isCompleted = trip.status === "completed";
-  const startTime = new Date(trip.startTime).toLocaleTimeString("ar-EG", {
+  const startTime = new Date(trip.started_at ?? trip.trip_date).toLocaleTimeString("ar-EG", {
     hour: "2-digit",
     minute: "2-digit",
   });
-  const startDate = new Date(trip.startTime).toLocaleDateString("ar-EG", {
+  const startDate = new Date(trip.trip_date).toLocaleDateString("ar-EG", {
     weekday: "long",
     day: "numeric",
     month: "long",
   });
 
-  const endTime = trip.endTime
-    ? new Date(trip.endTime).toLocaleTimeString("ar-EG", {
+  const endTime = trip.ended_at
+    ? new Date(trip.ended_at).toLocaleTimeString("ar-EG", {
         hour: "2-digit",
         minute: "2-digit",
       })
@@ -37,29 +37,15 @@ export default function TripTimeline({ trip }: TripTimelineProps) {
   return (
     <View style={[styles.container, { backgroundColor: colors.card }]}>
       {/* Driver Info */}
-      {trip.driverName && (
-        <View style={styles.driverInfo}>
-          <View style={[styles.avatar, { backgroundColor: colors.primary + "15" }]}>
-            <Text style={[styles.avatarText, { color: colors.primary }]}>
-              {trip.driverName.substring(0, 1)}
-            </Text>
-          </View>
-          <View style={styles.driverDetails}>
-            <Text style={[styles.driverName, { color: colors.text }]}>{trip.driverName}</Text>
-            {trip.driverVehicle && (
-              <Text style={[styles.driverVehicle, { color: colors.muted }]}>
-                {trip.driverVehicle}
-              </Text>
-            )}
-          </View>
-          {trip.driverRating && (
-            <View style={styles.ratingBadge}>
-              <FeatherIcon name="star" size={14} color="#FFD700" />
-              <Text style={styles.ratingText}>{trip.driverRating}</Text>
-            </View>
-          )}
+      <View style={styles.driverInfo}>
+        <View style={[styles.avatar, { backgroundColor: colors.primary + "15" }]}>
+          <Text style={[styles.avatarText, { color: colors.primary }]}>س</Text>
         </View>
-      )}
+        <View style={styles.driverDetails}>
+          <Text style={[styles.driverName, { color: colors.text }]}>السائق</Text>
+          <Text style={[styles.driverVehicle, { color: colors.muted }]}>سيارة</Text>
+        </View>
+      </View>
 
       {/* Timeline */}
       <View style={styles.timeline}>
@@ -75,7 +61,7 @@ export default function TripTimeline({ trip }: TripTimelineProps) {
               <Text style={[styles.entryTime, { color: colors.muted }]}>{startTime}</Text>
             </View>
             <Text style={[styles.entryAddress, { color: colors.muted }]} numberOfLines={2}>
-              {trip.originAddress}
+              موقع الانطلاق
             </Text>
             <Text style={[styles.entryDate, { color: colors.muted }]}>{startDate}</Text>
           </View>
@@ -97,7 +83,7 @@ export default function TripTimeline({ trip }: TripTimelineProps) {
               {endTime && <Text style={[styles.entryTime, { color: colors.muted }]}>{endTime}</Text>}
             </View>
             <Text style={[styles.entryAddress, { color: colors.muted }]} numberOfLines={2}>
-              {trip.destAddress}
+              الوجهة
             </Text>
           </View>
         </View>
@@ -111,7 +97,7 @@ export default function TripTimeline({ trip }: TripTimelineProps) {
             <Text style={[styles.fareLabel, { color: colors.text }]}>تمت الرحلة بنجاح</Text>
           </View>
           <Text style={[styles.fareAmount, { color: colors.success }]}>
-            {formatFare(trip.fare)}
+            {formatFare("0")}
           </Text>
         </View>
       )}

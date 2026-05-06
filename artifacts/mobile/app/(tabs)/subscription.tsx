@@ -15,26 +15,20 @@ import { router } from "expo-router";
 
 import { SUBSCRIPTION_PLANS, SubscriptionCard } from "@/components/SubscriptionCard";
 import { EarningsChart } from "@/components/EarningsChart";
-import { useApp } from "@/context/AppContext";
+import { useAuth, useSubscription, useTrip } from "@/context";
 import { useColors } from "@/hooks/useColors";
-import { api } from "@/lib/api";
 
 export default function SubscriptionScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const {
-    user,
-    subscription,
-    tripHistory,
-    todayEarnings,
-    weeklyEarnings,
-    weeklyEarningsData,
-    availableDrivers,
-    subscribeToPlan,
-    refreshUser,
-  } = useApp();
+  const { user } = useAuth();
+  const { subscription, subscribeToPlan, cancelSubscription } = useSubscription();
+  const { tripHistory } = useTrip();
 
   const [isCancelling, setIsCancelling] = useState(false);
+  const [todayEarnings] = useState(0);
+  const [weeklyEarnings] = useState(0);
+  const weeklyEarningsData: { week: number; count: number; earnings: number }[] = [];
 
   const topPad = insets.top + (Platform.OS === "web" ? 67 : 0);
   const bottomPad = Platform.OS === "web" ? 34 : 0;
@@ -54,8 +48,7 @@ export default function SubscriptionScreen() {
           onPress: async () => {
             try {
               setIsCancelling(true);
-              await api.delete(`/subscriptions/${subscription.id}`);
-              await refreshUser();
+              await cancelSubscription();
               Alert.alert("تم", "تم إلغاء الاشتراك بنجاح");
             } catch (err) {
               Alert.alert("خطأ", "فشل في إلغاء الاشتراك");
@@ -69,18 +62,20 @@ export default function SubscriptionScreen() {
   };
 
   if (role === "driver") {
-    const completedTrips = tripHistory.filter((t) => t.status === "completed");
+    const completedTrips = (tripHistory || []).filter((t: any) => t.status === "completed");
     
     const currentMonth = new Date().getMonth();
     const currentYear = new Date().getFullYear();
-    const tripsThisMonth = completedTrips.filter(t => {
-      const d = new Date(t.startTime);
+    const tripsThisMonth = completedTrips.filter((t: any) => {
+      const d = new Date(t.started_at ?? t.trip_date);
       return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
     });
 
+    const DRIVER_PAYOUT_PER_TRIP = 70000;
+
     const weeks = [1, 2, 3, 4].map(w => {
-      const weekTrips = tripsThisMonth.filter(t => {
-        const d = new Date(t.startTime);
+      const weekTrips = tripsThisMonth.filter((t: any) => {
+        const d = new Date(t.started_at ?? t.trip_date);
         const day = d.getDate();
         if (w === 1) return day <= 7;
         if (w === 2) return day > 7 && day <= 14;
@@ -90,16 +85,14 @@ export default function SubscriptionScreen() {
       return {
         week: w,
         count: weekTrips.length,
-        earnings: weekTrips.reduce((sum, t) => sum + Number(t.driverShare ?? 0), 0)
+        earnings: weekTrips.length * DRIVER_PAYOUT_PER_TRIP
       };
     });
 
-    const monthlyEarnings = tripsThisMonth.reduce((sum, t) => sum + Number(t.driverShare ?? 0), 0);
-    const appCommissionTotal = tripsThisMonth.reduce((sum, t) => sum + Number(t.appCommission ?? 0), 0);
-
-    const projectedMonthly = Math.round((weeklyEarnings / 7) * 30);
-
-    const acceptanceRate = tripHistory.length > 0 
+    const monthlyEarnings = tripsThisMonth.length * DRIVER_PAYOUT_PER_TRIP;
+    const appCommissionTotal = tripsThisMonth.length * 20000;
+    const projectedMonthly = Math.round((weeklyEarnings || 0) / 7 * 30);
+    const acceptanceRate = tripHistory && tripHistory.length > 0 
       ? Math.round((completedTrips.length / tripHistory.length) * 100) 
       : 100;
 
@@ -147,7 +140,7 @@ export default function SubscriptionScreen() {
         >
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>أداء الأسبوع</Text>
-            <EarningsChart data={weeklyEarningsData} />
+            <EarningsChart data={weeks.map(w => ({ day: `أسبوع ${w.week}`, amount: w.earnings })) || []} />
           </View>
 
           <View style={styles.section}>
@@ -226,14 +219,15 @@ export default function SubscriptionScreen() {
     );
   }
 
+  const isActive = subscription?.status === "active";
   const daysLeft = subscription
-    ? Math.max(0, Math.ceil((new Date(subscription.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    ? Math.max(0, Math.ceil((new Date(subscription.end_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
     : 0;
 
   const progress = daysLeft / 30;
 
-  const tripsThisMonthCount = tripHistory.filter(t => {
-    const d = new Date(t.startTime);
+  const tripsThisMonthCount = (tripHistory || []).filter((t: any) => {
+    const d = new Date(t.started_at ?? t.trip_date);
     return d.getMonth() === new Date().getMonth() && t.status === "completed";
   }).length;
 
@@ -252,7 +246,7 @@ export default function SubscriptionScreen() {
         contentContainerStyle={{ padding: 16, paddingBottom: bottomPad + 100 }}
         showsVerticalScrollIndicator={false}
       >
-        {subscription?.isActive && (
+        {isActive && (
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>اشتراكك الحالي</Text>
             <View style={[styles.activeSubCard, { backgroundColor: colors.primary }]}>
@@ -265,10 +259,10 @@ export default function SubscriptionScreen() {
               <View style={styles.activeSubTop}>
                 <View>
                   <Text style={styles.activeSubPlan}>
-                    {subscription.plan === "basic" ? "الأساسي" : subscription.plan === "standard" ? "القياسي" : "المميز"}
+                    اشتراك شهري
                   </Text>
-                  <Text style={styles.activeSubDriver}>مع {subscription.driverName}</Text>
-                  <Text style={styles.expiryDateText}>ينتهي في {new Date(subscription.endDate).toLocaleDateString("ar-IQ")}</Text>
+                  <Text style={styles.activeSubDriver}>مع السائق</Text>
+                  <Text style={styles.expiryDateText}>ينتهي في {new Date(subscription.end_date).toLocaleDateString("ar-IQ")}</Text>
                 </View>
                 <View style={styles.ringContainer}>
                   <View style={[styles.ringOuter, { borderColor: "rgba(255,255,255,0.2)" }]} />
@@ -292,14 +286,12 @@ export default function SubscriptionScreen() {
                 </View>
                 <View style={styles.activeSubStatDiv} />
                 <View style={styles.activeSubStat}>
-                  <Text style={styles.activeSubStatValue}>{subscription.tripsUsed}</Text>
-                  <Text style={styles.activeSubStatLabel}>رحلة استُخدمت</Text>
+                  <Text style={styles.activeSubStatValue}>{tripsThisMonthCount}</Text>
+                  <Text style={styles.activeSubStatLabel}>رحلة هذا الشهر</Text>
                 </View>
                 <View style={styles.activeSubStatDiv} />
                 <View style={styles.activeSubStat}>
-                  <Text style={styles.activeSubStatValue}>
-                    {subscription.tripsPerMonth === 999 ? "∞" : subscription.tripsPerMonth - subscription.tripsUsed}
-                  </Text>
+                  <Text style={styles.activeSubStatValue}>22</Text>
                   <Text style={styles.activeSubStatLabel}>رحلة متبقية</Text>
                 </View>
               </View>
@@ -346,50 +338,24 @@ export default function SubscriptionScreen() {
         </TouchableOpacity>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>مقارنة الخطط</Text>
-          <View style={[styles.comparisonCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.comparisonHeader}>
-              <Text style={[styles.comparisonLabel, { flex: 2, color: colors.mutedForeground }]}>الميزة</Text>
-              <Text style={[styles.comparisonLabel, { color: colors.mutedForeground }]}>أساسي</Text>
-              <Text style={[styles.comparisonLabel, { color: colors.mutedForeground }]}>قياسي</Text>
-              <Text style={[styles.comparisonLabel, { color: colors.mutedForeground }]}>مميز</Text>
-            </View>
-            <View style={styles.comparisonRow}>
-              <Text style={[styles.comparisonText, { flex: 2, color: colors.foreground }]}>الرحلات</Text>
-              <Text style={[styles.comparisonText, { color: colors.foreground }]}>20</Text>
-              <Text style={[styles.comparisonText, { color: colors.foreground }]}>45</Text>
-              <Text style={[styles.comparisonText, { color: colors.foreground }]}>∞</Text>
-            </View>
-            <View style={[styles.separator, { backgroundColor: colors.border }]} />
-            <View style={styles.comparisonRow}>
-              <Text style={[styles.comparisonText, { flex: 2, color: colors.foreground }]}>أولوية</Text>
-              <Text style={[styles.comparisonText, { color: colors.foreground }]}>-</Text>
-              <Text style={[styles.comparisonText, { color: colors.foreground }]}>✓</Text>
-              <Text style={[styles.comparisonText, { color: colors.foreground }]}>عالية</Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
-            {subscription?.isActive ? "تغيير الخطة" : "اختر خطتك"}
+            {isActive ? "تغيير الخطة" : "اختر خطتك"}
           </Text>
           {SUBSCRIPTION_PLANS.map((plan) => (
             <SubscriptionCard
               key={plan.id}
               plan={plan}
-              isActive={subscription?.plan === plan.id && subscription?.isActive}
-
+              isActive={isActive}
               onSelect={() => {
-                if (subscription?.driverId) {
-                  subscribeToPlan(subscription.driverId, plan.id);
+                if (subscription?.driver_id) {
+                  subscribeToPlan(subscription.driver_id, plan.id as any);
                 }
               }}
             />
           ))}
         </View>
 
-        {subscription?.isActive && (
+        {isActive && (
           <TouchableOpacity 
             style={styles.cancelButton} 
             onPress={handleCancelSubscription}
