@@ -212,7 +212,7 @@ export default async function TripsPage({ searchParams }: Props) {
                     {trip.endedAt ? new Date(trip.endedAt).toLocaleTimeString('ar-IQ') : '—'}
                   </td>
                   <td className="px-6 py-4 text-gray-500">
-                    {new Date(trip.createdAt).toLocaleDateString('ar-IQ')}
+                    {new Intl.DateTimeFormat('ar-IQ', { timeZone: 'Asia/Baghdad' }).format(new Date(trip.createdAt))}
                   </td>
                 </tr>
               ))}

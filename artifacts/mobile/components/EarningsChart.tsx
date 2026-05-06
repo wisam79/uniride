@@ -28,7 +28,11 @@ export function EarningsChart({ data, maxAmount }: EarningsChartProps) {
   const max = maxAmount ?? Math.max(...data.map((d) => d.amount), 1);
   const hasData = data.some((d) => d.amount > 0);
 
-  const barAnims = useRef(data.map(() => new Animated.Value(0))).current;
+  const barAnimsRef = useRef<Animated.Value[]>([]);
+  if (barAnimsRef.current.length !== data.length) {
+    barAnimsRef.current = data.map(() => new Animated.Value(0));
+  }
+  const barAnims = barAnimsRef.current;
 
   useEffect(() => {
     const animations = barAnims.map((anim, i) =>
@@ -41,7 +45,7 @@ export function EarningsChart({ data, maxAmount }: EarningsChartProps) {
       })
     );
     Animated.stagger(80, animations).start();
-  }, []);
+  }, [data.length]);
 
   const handleBarPress = (idx: number) => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);

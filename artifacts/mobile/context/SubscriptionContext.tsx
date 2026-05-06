@@ -216,9 +216,17 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     subscribeToPlan,
     bookRoute,
     fetchPendingRequests,
-  }), [subscription, pendingRequests, fetchSubscription, fetchPendingRequests]);
+  }), [subscription, pendingRequests, fetchSubscription, fetchPendingRequests, user]);
 
   return <SubscriptionContext.Provider value={value}>{children}</SubscriptionContext.Provider>;
+}
+
+export function useSubscription() {
+  const ctx = useContext(SubscriptionContext);
+  if (!ctx) throw new Error("useSubscription must be used within SubscriptionProvider");
+  return ctx;
+}
+ovider>;
 }
 
 export function useSubscription() {

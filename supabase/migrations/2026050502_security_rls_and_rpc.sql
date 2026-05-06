@@ -38,6 +38,14 @@ CREATE INDEX IF NOT EXISTS idx_otp_codes_phone ON otp_codes(phone);
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
 
 -- ============================================================
+-- HELPER FUNCTION FOR ADMIN CHECK (AVOIDS RECURSION)
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION is_admin() RETURNS BOOLEAN LANGUAGE sql SECURITY DEFINER AS $$
+  SELECT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin');
+$$;
+
+-- ============================================================
 -- RLS POLICIES - PROFILES
 -- ============================================================
 
@@ -48,7 +56,7 @@ CREATE POLICY "Users can update own profile" ON profiles
   FOR UPDATE USING (auth.uid() = id);
 
 CREATE POLICY "Admins can view all profiles" ON profiles
-  FOR SELECT USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+  FOR SELECT USING (is_admin());
 
 -- ============================================================
 -- RLS POLICIES - DRIVERS
@@ -61,7 +69,7 @@ CREATE POLICY "Drivers can update own driver record" ON drivers
   FOR UPDATE USING (auth.uid() = user_id);
 
 CREATE POLICY "Admins can view all drivers" ON drivers
-  FOR SELECT USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+  FOR SELECT USING (is_admin());
 
 -- ============================================================
 -- RLS POLICIES - ROUTES
@@ -183,8 +191,8 @@ CREATE POLICY "Users can update own notifications" ON notifications
 CREATE POLICY "Users can view own OTP codes" ON otp_codes
   FOR SELECT USING (auth.uid() = (SELECT id FROM profiles WHERE phone = otp_codes.phone));
 
-CREATE POLICY "Users can insert own OTP" ON otp_codes
-  FOR INSERT WITH CHECK (auth.uid() = (SELECT id FROM profiles WHERE phone = otp_codes.phone));
+-- Client cannot insert OTP directly
+-- (OTP generation should be handled by a secure backend RPC or service)
 
 -- ============================================================
 -- TRIP STATE MACHINE RPC FUNCTION

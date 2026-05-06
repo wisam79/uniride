@@ -89,26 +89,17 @@ export default function ActivateCardScreen() {
         .single();
 
       if (cardError || !card) {
-        setErrorMsg("كود غير صالح");
-        shake();
-        setActivating(false);
-        return;
+        throw new Error("كود غير صالح");
       }
 
       if (card.is_used) {
-        setErrorMsg("هذا الكود مستخدم مسبقاً");
-        shake();
-        setActivating(false);
-        return;
+        throw new Error("هذا الكود مستخدم مسبقاً");
       }
 
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id;
       if (!userId) {
-        setErrorMsg("يجب تسجيل الدخول أولاً");
-        shake();
-        setActivating(false);
-        return;
+        throw new Error("يجب تسجيل الدخول أولاً");
       }
 
       const { error: updateError } = await supabase
@@ -117,10 +108,7 @@ export default function ActivateCardScreen() {
         .eq("id", card.id);
 
       if (updateError) {
-        setErrorMsg("فشل تفعيل البطاقة، حاول مرة أخرى");
-        shake();
-        setActivating(false);
-        return;
+        throw new Error("فشل تفعيل البطاقة، حاول مرة أخرى");
       }
 
       const { error: subError } = await supabase.from("subscriptions").insert({
@@ -133,10 +121,13 @@ export default function ActivateCardScreen() {
       });
 
       if (subError) {
-        setErrorMsg("تم تفعيل البطاقة لكن فشل إنشاء الاشتراك");
-        shake();
-        setActivating(false);
-        return;
+        // Attempt manual rollback since we lack an RPC transaction
+        await supabase
+          .from("cards")
+          .update({ is_used: false, used_by: null, used_at: null })
+          .eq("id", card.id);
+          
+        throw new Error("حدث خطأ أثناء إنشاء الاشتراك. يرجى المحاولة مرة أخرى.");
       }
 
       Animated.spring(successAnim, { toValue: 1, useNativeDriver: true, damping: 8 }).start();

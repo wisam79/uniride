@@ -73,4 +73,7 @@ async function main() {
   console.log('🎉 Test driver setup complete! You can now log into the mobile app.');
 }
 
-main().catch(console.error);
+main().then(() => process.exit(0)).catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

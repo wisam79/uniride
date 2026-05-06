@@ -34,7 +34,7 @@ export default async function DashboardPage() {
     <div className="space-y-8" dir="rtl">
       <div>
         <h3 className="text-2xl font-bold text-gray-800">نظرة عامة</h3>
-        <p className="text-gray-500 mt-1">ملخص إحصائيات النظام ليوم {new Date().toLocaleDateString('ar-IQ')}</p>
+        <p className="text-gray-500 mt-1">ملخص إحصائيات النظام ليوم {new Intl.DateTimeFormat('ar-IQ', { timeZone: 'Asia/Baghdad' }).format(new Date())}</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -78,7 +78,7 @@ export default async function DashboardPage() {
                 <div key={trip.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 hover:bg-gray-100">
                   <div>
                     <p className="font-medium text-gray-800 text-sm">
-                      {trip.direction === 'go' ? 'ذهاب' : 'عودة'} - {new Date(trip.tripDate).toLocaleDateString('ar-IQ')}
+                      {trip.direction === 'go' ? 'ذهاب' : 'عودة'} - {new Intl.DateTimeFormat('ar-IQ', { timeZone: 'Asia/Baghdad' }).format(new Date(trip.tripDate))}
                     </p>
                     <p className="text-xs text-gray-500 mt-0.5">{new Date(trip.createdAt).toLocaleTimeString('ar-IQ')}</p>
                   </div>

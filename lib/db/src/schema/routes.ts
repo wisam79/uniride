@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, boolean, integer, numeric, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, boolean, integer, numeric, timestamp, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { driversTable } from "./drivers";
 import { institutionsTable } from "./users";
@@ -23,6 +23,11 @@ export const routesTable = pgTable("routes", {
   isActive: boolean("is_active").default(true).notNull(),
   isDeleted: boolean("is_deleted").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    driverIdIdx: index("idx_routes_driver_id").on(table.driverId),
+    activeIdx: index("idx_routes_active").on(table.isActive),
+  };
 });
 
 export const insertRouteSchema = createInsertSchema(routesTable).omit({ id: true, createdAt: true, isDeleted: true });

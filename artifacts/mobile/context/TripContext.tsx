@@ -212,6 +212,18 @@ export function TripProvider({ children }: { children: React.ReactNode }) {
     fetchTripHistory,
     setActiveTrip,
     clearError: () => setError(null),
+  }), [activeTrip, tripHistory, error, user, driver]);
+
+  return <TripContext.Provider value={value}>{children}</TripContext.Provider>;
+}
+
+export function useTrip() {
+  const ctx = useContext(TripContext);
+  if (!ctx) throw new Error("useTrip must be used within TripProvider");
+  return ctx;
+} fetchTripHistory,
+    setActiveTrip,
+    clearError: () => setError(null),
   }), [activeTrip, tripHistory, error]);
 
   return <TripContext.Provider value={value}>{children}</TripContext.Provider>;

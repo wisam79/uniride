@@ -3,6 +3,10 @@ import postgres from 'postgres';
 const sql = postgres(process.env.DATABASE_URL as string);
 
 async function main() {
+  if (process.env.NODE_ENV === 'production') {
+    console.error("Cannot reset database in production!");
+    process.exit(1);
+  }
   console.log("Dropping schema public...");
   await sql`DROP SCHEMA IF EXISTS public CASCADE;`;
   console.log("Creating schema public...");

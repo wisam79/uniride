@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, boolean, integer, timestamp, date } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, boolean, integer, timestamp, date, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { profilesTable } from "./users";
 import { driversTable } from "./drivers";
@@ -28,6 +28,12 @@ export const subscriptionRequestsTable = pgTable("subscription_requests", {
   status: text("status", { enum: ["pending", "accepted", "rejected"] }).notNull().default("pending"),
   respondedAt: timestamp("responded_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    studentIdIdx: index("idx_subscription_requests_student").on(table.studentId),
+    driverIdIdx: index("idx_subscription_requests_driver").on(table.driverId),
+    statusIdx: index("idx_subscription_requests_status").on(table.status),
+  };
 });
 
 export const subscriptionsTable = pgTable("subscriptions", {
@@ -52,6 +58,14 @@ export const subscriptionsTable = pgTable("subscriptions", {
   isDeleted: boolean("is_deleted").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    studentIdIdx: index("idx_subscriptions_student_id").on(table.studentId),
+    driverIdIdx: index("idx_subscriptions_driver_id").on(table.driverId),
+    statusIdx: index("idx_subscriptions_status").on(table.status),
+    paymentStatusIdx: index("idx_subscriptions_payment_status").on(table.paymentStatus),
+    activationCodeIdx: index("idx_subscriptions_activation_code").on(table.activationCode),
+  };
 });
 
 export const insertSubscriptionRequestSchema = createInsertSchema(subscriptionRequestsTable).omit({ id: true, respondedAt: true, createdAt: true });

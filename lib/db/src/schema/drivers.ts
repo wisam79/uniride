@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, boolean, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, boolean, integer, timestamp, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { profilesTable } from "./users";
 import { institutionsTable } from "./users";
@@ -10,7 +10,7 @@ export const driversTable = pgTable("drivers", {
   vehiclePlate: text("vehicle_plate"),
   vehicleColor: text("vehicle_color"),
   capacity: integer("capacity").notNull().default(4),
-  availableSeats: integer("available_seats").notNull().default(4),
+  availableSeats: integer("available_seats").notNull().default(4), // Primary operational field synced via triggers
   monthlyFee: integer("monthly_fee").notNull().default(90000),
   commissionBps: integer("commission_bps").notNull().default(1500),
   isAvailable: boolean("is_available").default(true).notNull(),
@@ -19,6 +19,10 @@ export const driversTable = pgTable("drivers", {
   isDeleted: boolean("is_deleted").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => {
+  return {
+    userIdIdx: index("idx_drivers_user_id").on(table.userId),
+  };
 });
 
 export const driverSchedulesTable = pgTable("driver_schedules", {

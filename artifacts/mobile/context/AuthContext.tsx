@@ -52,7 +52,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let authSubscription: { unsubscribe: () => void } | null = null;
+
+    async function initializeAuth() {
+      setIsLoading(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          await loadUserProfile(session.user.id);
+        }
+      } catch (err: any) {
+        setError(err?.message || "فشل تحميل الجلسة");
+      }
+      setIsLoading(false);
+
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+        if (session) {
+          await loadUserProfile(session.user.id);
+        } else {
+          setUser(null);
+          setIsAuthenticated(false);
+        }
+      });
+      authSubscription = subscription;
+    }
+
     initializeAuth();
+
+    return () => {
+      if (authSubscription) {
+        authSubscription.unsubscribe();
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -61,28 +92,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return () => clearTimeout(timer);
     }
   }, [error]);
-
-  async function initializeAuth() {
-    setIsLoading(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        await loadUserProfile(session.user.id);
-      }
-    } catch (err: any) {
-      setError(err?.message || "فشل تحميل الجلسة");
-    }
-    setIsLoading(false);
-
-    supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session) {
-        await loadUserProfile(session.user.id);
-      } else {
-        setUser(null);
-        setIsAuthenticated(false);
-      }
-    });
-  }
 
   async function loadUserProfile(userId: string) {
     try {

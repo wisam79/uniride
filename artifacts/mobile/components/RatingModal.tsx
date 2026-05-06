@@ -85,10 +85,15 @@ export default function RatingModal({
     }
     setSelectedTags(newTags);
     
-    // Update comment with tags
-    const cleanTag = (t: string) => t.split(" ")[0]; // Remove emoji for text
-    const tagsStr = newTags.map(cleanTag).join("، ");
-    setComment(tagsStr);
+    // Update comment with tags without overwriting
+    const tagText = tag.split(" ")[0]; // Remove emoji for text
+    setComment(prev => {
+      if (newTags.includes(tag)) {
+        return prev ? prev + "، " + tagText : tagText;
+      } else {
+        return prev.replace(new RegExp(`(، )?${tagText}( ،)?`, 'g'), '').replace(/^، | ،$/g, '').trim();
+      }
+    });
   };
 
   const handleSubmit = async () => {

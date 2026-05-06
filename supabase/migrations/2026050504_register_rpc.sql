@@ -23,6 +23,16 @@ AS $$
 DECLARE
   v_driver_id UUID;
 BEGIN
+  -- Security Check
+  IF auth.uid() != p_user_id THEN
+    RETURN jsonb_build_object('success', false, 'error', 'UNAUTHORIZED');
+  END IF;
+
+  -- Prevent role elevation to admin
+  IF p_role = 'admin' THEN
+    RETURN jsonb_build_object('success', false, 'error', 'CANNOT_ELEVATE_TO_ADMIN');
+  END IF;
+
   -- 1. Update the profile
   UPDATE profiles SET
     full_name = p_full_name,
@@ -63,11 +73,10 @@ BEGIN
       )
       RETURNING id INTO v_driver_id;
     ELSE
-      -- Update existing driver
+      -- Update existing driver, do not overwrite available_seats
       UPDATE drivers SET
         vehicle_info = COALESCE(p_vehicle_info, vehicle_info),
         capacity = p_capacity,
-        available_seats = p_capacity, -- Reset seats on registration update
         monthly_fee = p_monthly_fee,
         institution_id = COALESCE(p_institution_id, institution_id)
       WHERE id = v_driver_id;

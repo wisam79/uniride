@@ -62,7 +62,7 @@ export default async function UsersPage({ searchParams }: Props) {
                     )}
                   </td>
                   <td className="px-6 py-4 text-gray-500">
-                    {new Date(user.createdAt).toLocaleDateString('ar-IQ')}
+                    {new Intl.DateTimeFormat('ar-IQ', { timeZone: 'Asia/Baghdad' }).format(new Date(user.createdAt))}
                   </td>
                 </tr>
               ))}

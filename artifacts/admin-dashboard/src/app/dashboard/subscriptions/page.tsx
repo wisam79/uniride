@@ -207,7 +207,7 @@ export default async function SubscriptionsPage({ searchParams }: Props) {
                   </td>
                   <td className="px-6 py-4 text-gray-600">
                     {sub.endDate
-                      ? new Date(sub.endDate).toLocaleDateString('ar-IQ')
+                      ? new Intl.DateTimeFormat('ar-IQ', { timeZone: 'Asia/Baghdad' }).format(new Date(sub.endDate))
                       : '-'}
                   </td>
                   <td className="px-6 py-4 text-gray-900 font-medium" dir="ltr">

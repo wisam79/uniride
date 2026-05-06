@@ -180,6 +180,15 @@ DECLARE
   v_driver_payout INTEGER;
   v_payment_status TEXT;
 BEGIN
+  -- Security check
+  IF NOT EXISTS (
+    SELECT 1 FROM subscriptions s
+    LEFT JOIN profiles p ON p.id = auth.uid()
+    WHERE s.id = p_subscription_id AND (s.student_id = auth.uid() OR p.role = 'admin')
+  ) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'UNAUTHORIZED');
+  END IF;
+
   -- Idempotency check - lock first to prevent race
   IF p_idempotency_key IS NOT NULL THEN
     SELECT status, payment_status INTO v_current_status, v_payment_status
@@ -263,6 +272,11 @@ DECLARE
   v_discounted_fee INTEGER;
   v_discount_amount INTEGER := 5000; -- fixed 5,000 IQD
 BEGIN
+  -- Security Check
+  IF auth.uid() != p_student_id AND NOT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin') THEN
+    RETURN jsonb_build_object('success', false, 'error', 'UNAUTHORIZED');
+  END IF;
+
   -- Find referrer by activation code
   SELECT student_id INTO v_referrer_id
     FROM subscriptions
@@ -326,6 +340,15 @@ DECLARE
   v_deduction_amount INTEGER := 0;
   v_absence_id UUID;
 BEGIN
+  -- Security check
+  IF NOT EXISTS (
+    SELECT 1 FROM drivers d
+    LEFT JOIN profiles p ON p.id = auth.uid()
+    WHERE d.id = p_driver_id AND (d.user_id = auth.uid() OR p.role = 'admin')
+  ) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'UNAUTHORIZED');
+  END IF;
+
   -- Fetch deduction rate from settings
   SELECT value::numeric INTO v_deduction_percent
     FROM app_settings
@@ -379,6 +402,15 @@ DECLARE
   v_refund_amount INTEGER;
   v_cancellation_fee INTEGER;
 BEGIN
+  -- Security check
+  IF NOT EXISTS (
+    SELECT 1 FROM subscriptions s
+    LEFT JOIN profiles p ON p.id = auth.uid()
+    WHERE s.id = p_subscription_id AND (s.student_id = auth.uid() OR p.role = 'admin')
+  ) THEN
+    RETURN jsonb_build_object('success', false, 'error', 'UNAUTHORIZED');
+  END IF;
+
   SELECT * INTO v_subscription
     FROM subscriptions
     WHERE id = p_subscription_id
@@ -388,6 +420,10 @@ BEGIN
   IF NOT FOUND THEN
     RETURN jsonb_build_object('success', false, 'error', 'NOT_ACTIVE');
   END IF;
+
+  -- Restore available seats
+  UPDATE drivers SET available_seats = available_seats + 1 WHERE id = v_subscription.driver_id;
+  UPDATE routes SET available_seats = available_seats + 1 WHERE driver_id = v_subscription.driver_id AND is_active = true;
 
   -- Calculate days used
   v_days_used := CURRENT_DATE - v_subscription.start_date;

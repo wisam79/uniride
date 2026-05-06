@@ -62,6 +62,9 @@ export async function createRoute(formData: FormData) {
 }
 
 export async function updateRoute(id: string, formData: FormData) {
+  // SECURITY FIX: Protect route mutation
+  await requireAdmin();
+
   try {
     const data = {
       driverId: formData.get('driverId') as string,
@@ -116,6 +119,9 @@ export async function deleteRoute(id: string) {
 }
 
 export async function toggleRouteActive(id: string, isActive: boolean) {
+  // SECURITY FIX: Protect route mutation
+  await requireAdmin();
+
   try {
     await db.update(routesTable)
       .set({ isActive })

@@ -64,14 +64,24 @@ export default function SubscriptionScreen() {
   if (role === "driver") {
     const completedTrips = (tripHistory || []).filter((t: any) => t.status === "completed");
     
-    const currentMonth = new Date().getMonth();
-    const currentYear = new Date().getFullYear();
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay()).getTime();
+    
+    const DRIVER_PAYOUT_PER_TRIP = 70000;
+
+    let todayEarnings = 0;
+    let weeklyEarnings = 0;
+
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
     const tripsThisMonth = completedTrips.filter((t: any) => {
       const d = new Date(t.started_at ?? t.trip_date);
+      const time = d.getTime();
+      if (time >= startOfDay) todayEarnings += DRIVER_PAYOUT_PER_TRIP;
+      if (time >= startOfWeek) weeklyEarnings += DRIVER_PAYOUT_PER_TRIP;
       return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
     });
-
-    const DRIVER_PAYOUT_PER_TRIP = 70000;
 
     const weeks = [1, 2, 3, 4].map(w => {
       const weekTrips = tripsThisMonth.filter((t: any) => {

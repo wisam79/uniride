@@ -74,7 +74,7 @@ export function NotificationBanner({ message, type, onDismiss, visible }: Props)
     });
   };
 
-  if (!visible) return null;
+  // Removed early return `if (!visible) return null;` to allow exit animation
 
   return (
     <Animated.View
