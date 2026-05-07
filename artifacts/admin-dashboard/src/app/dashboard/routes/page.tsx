@@ -171,30 +171,28 @@ export default async function RoutesPage({ searchParams }: Props) {
               إجمالي {totalCount} مسار | صفحة {page} من {totalPages}
             </span>
             <div className="flex gap-2" dir="ltr">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page <= 1}
-                className={page <= 1 ? 'pointer-events-none text-gray-300 border-gray-200' : ''}
-                asChild
-              >
-                <a href={`/dashboard/routes?page=${Math.max(1, page - 1)}&limit=${limit}&search=${params.search}&status=${params.status || ''}&institutionId=${params.institutionId || ''}`}>
+              <a href={`/dashboard/routes?page=${Math.max(1, page - 1)}&limit=${limit}&search=${params.search}&status=${params.status || ''}&institutionId=${params.institutionId || ''}`}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  className={page <= 1 ? 'pointer-events-none text-gray-300 border-gray-200' : ''}
+                >
                   السابق
-                </a>
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page >= totalPages}
-                className={
-                  page >= totalPages ? 'pointer-events-none text-gray-300 border-gray-200' : ''
-                }
-                asChild
-              >
-                <a href={`/dashboard/routes?page=${Math.min(totalPages, page + 1)}&limit=${limit}&search=${params.search}&status=${params.status || ''}&institutionId=${params.institutionId || ''}`}>
+                </Button>
+              </a>
+              <a href={`/dashboard/routes?page=${Math.min(totalPages, page + 1)}&limit=${limit}&search=${params.search}&status=${params.status || ''}&institutionId=${params.institutionId || ''}`}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= totalPages}
+                  className={
+                    page >= totalPages ? 'pointer-events-none text-gray-300 border-gray-200' : ''
+                  }
+                >
                   التالي
-                </a>
-              </Button>
+                </Button>
+              </a>
             </div>
           </div>
         )}

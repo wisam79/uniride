@@ -1,16 +1,26 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+let cachedAdminClient: ReturnType<typeof createClient> | null = null;
 
-if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error('Missing Supabase URL or Service Role Key in environment variables.');
+export function getAdminClient() {
+  if (cachedAdminClient) {
+    return cachedAdminClient;
+  }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error('Missing Supabase URL or Service Role Key in environment variables.');
+  }
+
+  // Admin client strictly for server-side usage (bypasses RLS)
+  cachedAdminClient = createClient(supabaseUrl, supabaseServiceKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+
+  return cachedAdminClient;
 }
-
-// Admin client strictly for server-side usage (bypasses RLS)
-export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false,
-  },
-});

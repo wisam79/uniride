@@ -1,6 +1,6 @@
 'use server';
 
-import { supabaseAdmin } from './supabase-admin';
+import { getAdminClient } from './supabase-admin';
 import { db } from '@workspace/db';
 import { profilesTable, driversTable } from '@workspace/db/schema';
 import { revalidatePath } from 'next/cache';
@@ -23,6 +23,7 @@ const userSchema = z.object({
 
 export async function createUser(formData: FormData) {
   await requireAdmin();
+  const supabaseAdmin = getAdminClient();
 
   const { success } = await rateLimit('userCreation');
   if (!success) {

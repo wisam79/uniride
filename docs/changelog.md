@@ -1,5 +1,15 @@
 # UniRide Changelog
 
+## 2026-05-07 — Phase 0 Stabilization (Build Health)
+
+### Build and Typecheck Hardening
+- Changed admin Supabase service client initialization from eager module-time throw to lazy `getAdminClient()` creation, so build-time module evaluation does not fail before runtime context.
+- Updated admin usage sites to call `getAdminClient()` explicitly where service-role access is required.
+- Marked analytics dashboard page as dynamic to avoid static prerender assumptions for authenticated admin data.
+- Fixed mockup sandbox Vite type incompatibility by normalizing plugin entries to `PluginOption` in `vite.config.ts`.
+- Added safe defaults for mockup sandbox build config (`PORT=4173`, `BASE_PATH=/`) to prevent workspace build failures when env variables are absent.
+- Added `react-native-web` dependency to mobile workspace to satisfy Expo export web dependency requirements.
+
 ## 2026-05-07 — Core 1.0 Direction Reset
 
 ### Product Direction

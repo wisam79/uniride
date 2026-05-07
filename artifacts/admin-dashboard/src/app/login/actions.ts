@@ -1,6 +1,7 @@
+'use server';
+
 import { createClient } from '@/lib/supabase-server';
 import { redirect } from 'next/navigation';
-import { headers } from 'next/headers';
 import { rateLimit } from '@/lib/rate-limit';
 
 export async function loginAction(prevState: { error: string } | undefined, formData: FormData) {
@@ -35,9 +36,6 @@ export async function loginAction(prevState: { error: string } | undefined, form
   if (error) {
     return { error: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' };
   }
-
-  const headerList = await headers();
-  const origin = headerList.get('origin') || '';
 
   redirect('/dashboard');
 }

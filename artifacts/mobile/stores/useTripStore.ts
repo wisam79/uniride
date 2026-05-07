@@ -27,6 +27,7 @@ interface TripState {
   tripHistory: TripData[];
   error: string | null;
   setActiveTrip: (trip: TripData | null) => void;
+  setTripHistory: (history: TripData[]) => void;
   setError: (error: string | null) => void;
   clearError: () => void;
   startTrip: (direction: 'go' | 'return', driverId: string) => Promise<void>;

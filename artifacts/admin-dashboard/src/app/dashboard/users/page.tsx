@@ -28,13 +28,13 @@ export default async function UsersPage({ searchParams }: Props) {
   const [users, totalCount] = await Promise.all([
     profileRepository.findAllFiltered(limit, offset, {
       search: params.search,
-      role: params.role,
-      status: params.status,
+      role: params.role ?? undefined,
+      status: params.status ?? undefined,
     }),
     profileRepository.countFiltered({
       search: params.search,
-      role: params.role,
-      status: params.status,
+      role: params.role ?? undefined,
+      status: params.status ?? undefined,
     }),
   ]);
 

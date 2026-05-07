@@ -2,12 +2,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { RevenueChart } from '@/components/charts/RevenueChart';
 import { SubscriptionsChart } from '@/components/charts/SubscriptionsChart';
 import { TripsChart } from '@/components/charts/TripsChart';
-import { supabaseAdmin } from '@/lib/supabase-admin';
+import { getAdminClient } from '@/lib/supabase-admin';
 import { requireAdmin } from '@/lib/auth';
+
+export const dynamic = 'force-dynamic';
 
 export default async function AnalyticsPage() {
   await requireAdmin();
-  const supabase = supabaseAdmin;
+  const supabase = getAdminClient();
 
   // Fetch data for charts
   const { data: revenueData } = await supabase
