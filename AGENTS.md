@@ -1,10 +1,9 @@
 # 🤖 MASTER SYSTEM INSTRUCTIONS & PROJECT BLUEPRINT
+
 **ROLE:** You are a Senior Full-Stack Software Engineer, Solutions Architect, and QA Specialist.
 **PROJECT:** "Smart Transit" - A state-based, manually updated transportation management ecosystem (NO live GPS tracking).
 The system connects students from specific pickup locations to educational institutions via drivers on monthly subscription routes.
-**COMPONENTS:** 1. Mobile App (Unified - Student & Driver) - Expo / React Native
-2. Web Admin Dashboard - Next.js / React
-3. Backend & Database - Supabase (PostgreSQL)
+**COMPONENTS:** 1. Mobile App (Unified - Student & Driver) - Expo / React Native 2. Web Admin Dashboard - Next.js / React 3. Backend & Database - Supabase (PostgreSQL)
 
 ---
 
@@ -27,15 +26,18 @@ The system connects students from specific pickup locations to educational insti
 ---
 
 ## 💰 FINANCIAL ENGINE & MATHEMATICAL ACCURACY
+
 Financial accuracy is the highest priority. There is zero tolerance for mathematical or rounding errors.
 
 **Business Logic Constants:**
+
 - Base Student Subscription: 90,000 IQD / month.
 - Company Commission: Calculated as a dynamic percentage (e.g. 15% = 13,500 IQD) fetched from `app_settings.default_commission_rate` (Not a hardcoded value).
 - Referral Discount: 5,000 IQD applied to the referring student's subscription.
 - Target Work Days: 22 days/month.
 
 **Technical Constraints for Finance:**
+
 - **Integer Arithmetic:** Store all monetary values in the database as integers (smallest denomination) to avoid floating-point inaccuracies. Display them formatted to the user.
 - **ACID Transactions:** Any financial update (e.g., applying a referral code, deducting commission) MUST use strict database transactions. If one step fails, the entire transaction must rollback.
 - Write explicit failure tests for concurrent transactions (e.g., two students using the same referral code simultaneously).
@@ -43,9 +45,11 @@ Financial accuracy is the highest priority. There is zero tolerance for mathemat
 ---
 
 ## 🔄 STATE MANAGEMENT MECHANISM (CORE LOGIC)
+
 This app relies on **Manual State Updates** instead of live tracking.
 
 **Driver App Flow:**
+
 1. Driver logs in to the unified app → routed to Driver screens.
 2. Driver taps `Start Route` -> Updates route state to `active`. Notifications sent to mapped students.
 3. Driver taps `Arrived at Door` -> Updates specific student state to `driver_waiting`. Push notification sent to student.
@@ -53,12 +57,14 @@ This app relies on **Manual State Updates** instead of live tracking.
 5. Driver taps `Arrived at Destination` -> Updates states to `completed`.
 
 **Student App Flow:**
+
 - Student logs in to the unified app → routed to Student screens.
 - Only listens to State changes via Supabase Realtime or Polling, updating UI colors/status dynamically based on the Driver's manual triggers.
 
 ---
 
 ## 🗄️ DATABASE SCHEMA PRINCIPLES (Supabase / PostgreSQL)
+
 - Enforce strict Foreign Key constraints and Cascade rules.
 - Use Row Level Security (RLS) policies rigorously. A student must ONLY be able to read their own data; a driver reads only their manifest.
 - Soft Deletes: Never permanently delete users or financial records. Use an `is_deleted` or `status` boolean.
@@ -66,13 +72,14 @@ This app relies on **Manual State Updates** instead of live tracking.
 ---
 
 ## 🚀 EXECUTION INSTRUCTIONS (NEXT STEPS)
+
 Acknowledge these instructions by saying "AGENTS.md parsed. Master System Initialized."
 Then, execute the following steps exactly in order. DO NOT proceed to the next step until the current one is fully approved:
 
-* **Step 1: Trip State Machine & Realtime Integration:** Build the exact database logic (RPCs/Triggers) for Trip status transitions (`scheduled` -> `driver_waiting` -> `in_transit` -> `completed`). Implement Supabase Realtime subscriptions in the student mobile app to listen to these changes instantly without polling.
-* **Step 2: Admin Dashboard Auth Fix:** Implement the logic in the Next.js Admin Dashboard to create user profiles directly in `auth.users` via Supabase Admin API so users can log in via OTP.
-* **Step 3: Admin Dashboard Refactoring:** Replace raw Supabase queries in the admin dashboard with the newly unified Repository Pattern (where joins are supported or bypassed safely).
-* **Step 4: Documentation & Data Seeding:** Complete `docs/architecture.md`, `docs/system_architecture.md`, and set up remote seed data for staging testing.
+- **Step 1: Trip State Machine & Realtime Integration:** Build the exact database logic (RPCs/Triggers) for Trip status transitions (`scheduled` -> `driver_waiting` -> `in_transit` -> `completed`). Implement Supabase Realtime subscriptions in the student mobile app to listen to these changes instantly without polling.
+- **Step 2: Admin Dashboard Auth Fix:** Implement the logic in the Next.js Admin Dashboard to create user profiles directly in `auth.users` via Supabase Admin API so users can log in via OTP.
+- **Step 3: Admin Dashboard Refactoring:** Replace raw Supabase queries in the admin dashboard with the newly unified Repository Pattern (where joins are supported or bypassed safely).
+- **Step 4: Documentation & Data Seeding:** Complete `docs/architecture.md`, `docs/system_architecture.md`, and set up remote seed data for staging testing.
 
 ---
 
@@ -81,6 +88,7 @@ Then, execute the following steps exactly in order. DO NOT proceed to the next s
 ### Session: 2026-05-05 (Phase 1, 2 & 3: Completed)
 
 **Completed Code Fixes & Refactoring:**
+
 - ✅ Fixed `TripData` interface to match DB enum in `TripContext.tsx`.
 - ✅ Fixed `cancelTrip` to use soft delete via RPC in `TripContext.tsx`.
 - ✅ Admin user creation fixed to use `supabaseAdmin.auth.admin.createUser` atomically with `profiles` table.
@@ -95,6 +103,7 @@ Then, execute the following steps exactly in order. DO NOT proceed to the next s
 - ✅ All tests passing: 58 passed, 27 skipped (102 total across all suites).
 
 **Known Gaps:**
+
 - Remote seed data not yet deployed to staging Supabase instance.
 - Realtime listeners need end-to-end testing with actual Supabase project.
 
@@ -127,3 +136,126 @@ Then, execute the following steps exactly in order. DO NOT proceed to the next s
   ├── End-to-end flow testing (student registers → subscribes → driver starts trip → student sees status)
   └── Performance testing with realistic data volumes
 ```
+
+---
+
+### Session: 2026-05-07
+
+**Completed:**
+
+- Created useAppSettings hook (hooks/useAppSettings.ts) to fetch financial settings from app_settings table via TanStack Query
+- Created fallback constants file (lib/constants/financial.ts) with default values
+- Updated subscription.tsx to use useAppSettings hook
+- Updated AuthContext.tsx to use useAppSettings hook
+- Updated useBookRoute.ts to use useAppSettings hook
+- Updated SubscriptionCard.tsx to use dynamic subscription plans via useSubscriptionPlans hook
+- Updated hooks/index.ts to export useAppSettings
+- All TypeScript type checks pass
+
+**Files Created:**
+
+- hooks/useAppSettings.ts
+- lib/constants/financial.ts
+
+**Files Modified:**
+
+- app/(tabs)/subscription.tsx
+- context/AuthContext.tsx
+- hooks/useBookRoute.ts
+- hooks/index.ts
+- components/SubscriptionCard.tsx
+
+**Hardcoded Values Replaced:**
+
+- 70000 → (monthly_fee - commission_bps) / target_work_days
+- 20000 → commission_bps
+- 90000 → monthly_fee
+- 30 (days) → monthly_period_days
+- 22 (work days) → target_work_days
+- 3,500 → dynamic calculation
+
+**Test Status:** TypeScript compilation successful
+
+---
+
+### Session: 2026-05-07 (Zustand Migration)
+
+**Completed:**
+
+- Migrated 6 Context providers to Zustand stores
+- Created stores: useAuthStore, useTripStore, useDriverStore, useSubscriptionStore, useNotificationStore, useInstitutionStore
+- Created hooks: useAppInit, useAuthSync, useTripRealtime
+- Updated app/\_layout.tsx to remove RootProvider, use new hooks
+- Updated context/index.tsx for backward compatibility (re-exports from stores)
+- Updated 9 screens to import from stores instead of context
+- TypeScript compilation passes with no errors
+- Created migration documentation (docs/zustand-migration-summary.md)
+
+**Stores Created (in stores/ directory):**
+
+- useAuthStore.ts - Auth state (user, isAuthenticated, isLoading, error) + auth actions
+- useTripStore.ts - Trip state (activeTrip, tripHistory, error) + trip actions
+- useDriverStore.ts - Driver state (driver, availableDrivers)
+- useSubscriptionStore.ts - Subscription state (subscription, pendingRequests)
+- useNotificationStore.ts - Notification state (notifications, appNotifications, unreadCount)
+- useInstitutionStore.ts - Institution state (institutions)
+
+**Hooks Created (in hooks/ directory):**
+
+- useAppInit.ts - App initialization with auth loading
+- useAuthSync.ts - Supabase auth state change listener
+- useTripRealtime.ts - Supabase realtime subscription for trip updates
+
+**Files Modified:**
+
+- app/\_layout.tsx - Removed RootProvider, added AppInit component
+- context/index.tsx - Now re-exports types and stores for backward compatibility
+- app/(tabs)/profile.tsx - Updated to use stores
+- app/(tabs)/subscription.tsx - Updated to use stores
+- app/(tabs)/trips.tsx - Updated to use stores
+- app/(tabs)/index.tsx - Updated to use stores
+- app/(tabs)/\_layout.tsx - Updated to use stores
+- app/onboarding.tsx - Updated to use stores
+- app/activate-card.tsx - Updated to use stores
+- app/index.tsx - Updated to use stores
+- app/trip-receipt/[id].tsx - Updated to use stores
+
+**Key Migration Notes:**
+
+- Stores are synchronous; async supabase calls are in action functions
+- Realtime listeners moved to hooks (useTripRealtime), not in stores
+- No persist middleware used (session state can use it later if needed)
+- Backward compatibility maintained via context/index.tsx re-exports
+- Bundle size reduced (Zustand ~1KB vs React Context overhead)
+- Better performance with strict equality checks and fewer re-renders
+
+**Test Status:** TypeScript compilation successful (0 errors)
+
+---
+
+### Session: 2026-05-07 (Core 1.0 Direction Reset)
+
+**Completed:**
+
+- Defined UniRide Core 1.0 as a smart university transit subscription system.
+- Replaced the old manual-only/no-GPS direction with lightweight active-trip GPS plus driver-confirmed sensitive states.
+- Clarified that all business-critical financial values must be managed from the admin dashboard, not hardcoded in mobile/admin code.
+- Added documentation:
+  - `docs/PRODUCT_CORE.md`
+  - `docs/DECISIONS.md`
+  - `docs/FINANCIAL_POLICY.md`
+  - `docs/SMART_DRIVER_ASSISTANCE.md`
+  - `docs/TECH_DEBT_EXIT_PLAN.md`
+- Marked older architecture docs as supplemented by the new Core 1.0 decision documents.
+
+**Current Product Decision:**
+
+- Admin dashboard is the source of truth for pricing policies.
+- Database RPCs are the source of truth for financial calculations and critical state changes.
+- GPS is lightweight and active-trip-only.
+- Driver confirms sensitive events such as picked up, absent, dropped off, completed, and cancelled.
+
+**Pending:**
+
+- Finalize auth method: email/password, phone OTP, or email OTP.
+- Refactor existing code to match the new Core 1.0 documents.
