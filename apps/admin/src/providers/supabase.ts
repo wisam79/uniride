@@ -12,7 +12,7 @@ export async function createClient() {
         get(name: string) {
           return cookieStore.get(name)?.value;
         },
-        set(name: string, value: string, options: { path?: string; maxAge?: number; domain?: string; sameSite?: string; secure?: boolean; httpOnly?: boolean }) {
+        set(name: string, value: string, options: { path?: string; maxAge?: number; domain?: string; sameSite?: "none" | "strict" | "lax" | boolean; secure?: boolean; httpOnly?: boolean }) {
           try {
             cookieStore.set({ name, value, ...options });
           } catch {
