@@ -35,10 +35,6 @@ function checkRateLimit(userId: string, maxRequests: number, windowMs: number): 
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: CORS_HEADERS });
-  }
-
   try {
     const origin = req.headers.get('Origin') || '';
     const allowedOrigins = ALLOWED_ORIGINS.split(',');
@@ -48,6 +44,10 @@ Deno.serve(async (req: Request) => {
       'Access-Control-Allow-Origin': resolvedOrigin,
       'Content-Type': 'application/json',
     };
+
+    if (req.method === 'OPTIONS') {
+      return new Response('ok', { headers: responseHeaders });
+    }
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {

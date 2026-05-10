@@ -167,8 +167,9 @@ export function useDriverTrips() {
   useEffect(() => {
     fetchTrips();
 
+    const channelId = `driver-trips-${Date.now()}-${Math.random()}`;
     const channel = supabase
-      .channel('driver-trips')
+      .channel(channelId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'trips' }, () => {
         fetchTrips();
       })
