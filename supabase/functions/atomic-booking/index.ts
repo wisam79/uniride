@@ -124,9 +124,12 @@ Deno.serve(async (req: Request) => {
       headers: responseHeaders,
     });
   } catch (err) {
+    const origin = req.headers.get('Origin') || '';
+    const allowedOrigins = ALLOWED_ORIGINS.split(',');
+    const resolvedOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
     return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
-      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      headers: { ...CORS_HEADERS, 'Access-Control-Allow-Origin': resolvedOrigin, 'Content-Type': 'application/json' },
     });
   }
 });
