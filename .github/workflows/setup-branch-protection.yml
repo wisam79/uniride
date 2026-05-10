@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  administration: write
+  contents: write
 
 jobs:
   protect-main:
