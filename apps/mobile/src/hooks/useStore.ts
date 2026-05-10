@@ -67,20 +67,32 @@ interface BookingState {
   isBooking: boolean;
   lastBookingId: string | null;
   bookingError: string | null;
+  idempotencyKey: string | null;
   setBooking: (isBooking: boolean) => void;
   setBookingResult: (subscriptionId: string | null, error: string | null) => void;
   resetBooking: () => void;
+  setIdempotencyKey: (key: string) => void;
 }
 
-export const useBookingStore = create<BookingState>((set) => ({
-  isBooking: false,
-  lastBookingId: null,
-  bookingError: null,
-  setBooking: (isBooking) => set({ isBooking }),
-  setBookingResult: (subscriptionId, error) =>
-    set({ isBooking: false, lastBookingId: subscriptionId, bookingError: error }),
-  resetBooking: () => set({ isBooking: false, lastBookingId: null, bookingError: null }),
-}));
+export const useBookingStore = create<BookingState>()(
+  persist(
+    (set) => ({
+      isBooking: false,
+      lastBookingId: null,
+      bookingError: null,
+      idempotencyKey: null,
+      setBooking: (isBooking) => set({ isBooking }),
+      setBookingResult: (subscriptionId, error) =>
+        set({ isBooking: false, lastBookingId: subscriptionId, bookingError: error }),
+      resetBooking: () => set({ isBooking: false, lastBookingId: null, bookingError: null, idempotencyKey: null }),
+      setIdempotencyKey: (key) => set({ idempotencyKey: key }),
+    }),
+    {
+      name: 'booking-storage',
+      storage: createJSONStorage(() => AsyncStorage),
+    }
+  )
+);
 
 interface I18nState {
   language: Language;

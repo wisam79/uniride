@@ -50,4 +50,5 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- 7. Subscription cancellation RLS
 CREATE POLICY "Subscriptions: Students cancel own active" ON subscriptions FOR UPDATE
-  USING (student_id = auth.uid() AND status IN ('active', 'pending'));
+  USING (student_id = auth.uid() AND status IN ('active', 'pending'))
+  WITH CHECK (student_id = auth.uid() AND status = 'cancelled');

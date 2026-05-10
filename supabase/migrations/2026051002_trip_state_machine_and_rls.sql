@@ -77,11 +77,11 @@ DECLARE
 BEGIN
   SELECT available_seats INTO v_available_seats
   FROM routes
-  WHERE id = p_route_id
+  WHERE id = p_route_id AND is_active = true
   FOR UPDATE;
 
   IF v_available_seats IS NULL THEN
-    RAISE EXCEPTION 'Route not found';
+    RAISE EXCEPTION 'Route not found or inactive';
   END IF;
 
   IF v_available_seats <= 0 THEN

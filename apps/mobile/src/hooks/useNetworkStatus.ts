@@ -10,8 +10,8 @@ export function useNetworkStatus() {
 
     async function checkConnection() {
       try {
-        const { error } = await supabase.from('routes').select('id').limit(1);
-        if (mounted) setIsOnline(!error || error.code !== 'NETWORK_ERROR');
+        const { data, error } = await supabase.rpc('ping');
+        if (mounted) setIsOnline(!error && data === true);
       } catch {
         if (mounted) setIsOnline(false);
       }

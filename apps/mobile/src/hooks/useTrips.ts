@@ -1,7 +1,11 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import * as Location from 'expo-location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { Trip, TripStatus, Subscription } from '@uniride/core';
+
+const GPS_QUEUE_KEY = 'gps_offline_queue';
+const PAGE_SIZE = 20;
 
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
@@ -19,10 +23,11 @@ interface SubscriptionWithRoute extends Subscription {
   } | null;
 }
 
-export function useSubscriptions() {
+export function useSubscriptions(page = 0) {
   const [subscriptions, setSubscriptions] = useState<SubscriptionWithRoute[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(true);
 
   const fetchSubscriptions = useCallback(async () => {
     try {
@@ -30,34 +35,41 @@ export function useSubscriptions() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data, error } = await supabase
+      const from = page * PAGE_SIZE;
+      const { data, error, count } = await supabase
         .from('subscriptions')
-        .select('*, routes(*)')
+        .select('*, routes(*)', { count: 'exact' })
         .eq('student_id', user.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(from, from + PAGE_SIZE - 1);
 
       if (error) throw error;
-      setSubscriptions((data as SubscriptionWithRoute[]) || []);
+      const newSubs = (data as SubscriptionWithRoute[]) || [];
+      setSubscriptions(page === 0 ? newSubs : (prev) => [...prev, ...newSubs]);
+      setHasMore(newSubs.length === PAGE_SIZE && (!count || from + PAGE_SIZE < count));
     } catch (err: unknown) {
       setError(getErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [page]);
 
   useEffect(() => {
     fetchSubscriptions();
   }, [fetchSubscriptions]);
 
-  return { subscriptions, isLoading, error, refetch: fetchSubscriptions };
+  return { subscriptions, isLoading, error, refetch: fetchSubscriptions, hasMore };
 }
 
 export function useActiveTrips() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastRealtimeUpdate, setLastRealtimeUpdate] = useState<number>(0);
 
   useEffect(() => {
+    let isMounted = true;
+
     async function fetchTrips() {
       try {
         setIsLoading(true);
@@ -68,46 +80,65 @@ export function useActiveTrips() {
           .from('trips')
           .select('*')
           .in('status', ['driver_waiting', 'in_transit'])
-          .order('scheduled_at', { ascending: false });
+          .order('scheduled_at', { ascending: false })
+          .limit(50);
 
         if (error) throw error;
-        setTrips((data as Trip[]) || []);
+        if (isMounted) {
+          setTrips((data as Trip[]) || []);
+        }
       } catch (err: unknown) {
-        setError(getErrorMessage(err));
+        if (isMounted) setError(getErrorMessage(err));
       } finally {
-        setIsLoading(false);
+        if (isMounted) setIsLoading(false);
       }
     }
 
     fetchTrips();
 
     const channel = supabase
-      .channel('trips-realtime')
+      .channel('trips-active-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'trips' }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          setTrips((prev) => [payload.new as Trip, ...prev]);
+        if (!isMounted) return;
+        const newTrip = payload.new as Trip;
+        const oldTrip = payload.old as { id: string } | undefined;
+
+        if (payload.eventType === 'INSERT' &&
+            ['driver_waiting', 'in_transit'].includes(newTrip.status)) {
+          setTrips((prev) => {
+            if (prev.find((t) => t.id === newTrip.id)) return prev;
+            return [newTrip, ...prev];
+          });
+          setLastRealtimeUpdate(Date.now());
         } else if (payload.eventType === 'UPDATE') {
-          setTrips((prev) =>
-            prev.map((t) => (t.id === (payload.new as Trip).id ? (payload.new as Trip) : t))
-          );
-        } else if (payload.eventType === 'DELETE') {
-          const deletedId = (payload.old as { id: string }).id;
-          setTrips((prev) => prev.filter((t) => t.id !== deletedId));
+          if (['completed', 'cancelled', 'absent'].includes(newTrip.status)) {
+            setTrips((prev) => prev.filter((t) => t.id !== newTrip.id));
+          } else {
+            setTrips((prev) =>
+              prev.map((t) => (t.id === newTrip.id ? newTrip : t))
+            );
+          }
+          setLastRealtimeUpdate(Date.now());
+        } else if (payload.eventType === 'DELETE' && oldTrip) {
+          setTrips((prev) => prev.filter((t) => t.id !== oldTrip.id));
+          setLastRealtimeUpdate(Date.now());
         }
       })
       .subscribe();
 
     return () => {
+      isMounted = false;
       supabase.removeChannel(channel);
     };
   }, []);
 
-  return { trips, isLoading, error };
+  return { trips, isLoading, error, refetch: () => {} };
 }
 
 export function useTripTracking(tripId: string | null) {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!tripId) {
@@ -116,9 +147,20 @@ export function useTripTracking(tripId: string | null) {
     }
 
     async function fetchTrip() {
-      const { data } = await supabase.from('trips').select('*').eq('id', tripId).single();
-      setTrip(data as Trip | null);
-      setIsLoading(false);
+      try {
+        setIsLoading(true);
+        const { data, error } = await supabase
+          .from('trips')
+          .select('*')
+          .eq('id', tripId)
+          .single();
+        if (error) throw error;
+        setTrip(data as Trip);
+      } catch (err: unknown) {
+        setError(getErrorMessage(err));
+      } finally {
+        setIsLoading(false);
+      }
     }
 
     fetchTrip();
@@ -139,36 +181,41 @@ export function useTripTracking(tripId: string | null) {
     };
   }, [tripId]);
 
-  return { trip, isLoading };
+  return { trip, isLoading, error };
 }
 
-export function useDriverTrips() {
+export function useDriverTrips(page = 0) {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(true);
 
   const fetchTrips = useCallback(async () => {
     try {
       setIsLoading(true);
-      const { data, error } = await supabase
+      const from = page * PAGE_SIZE;
+      const { data, error, count } = await supabase
         .from('trips')
-        .select('*, routes(*)')
-        .order('scheduled_at', { ascending: false });
+        .select('*, routes(*)', { count: 'exact' })
+        .order('scheduled_at', { ascending: false })
+        .range(from, from + PAGE_SIZE - 1);
 
       if (error) throw error;
-      setTrips((data as Trip[]) || []);
+      const newTrips = (data as Trip[]) || [];
+      setTrips(page === 0 ? newTrips : (prev) => [...prev, ...newTrips]);
+      setHasMore(newTrips.length === PAGE_SIZE && (!count || from + PAGE_SIZE < count));
     } catch (err: unknown) {
       setError(getErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [page]);
 
   useEffect(() => {
     fetchTrips();
 
     const channel = supabase
-      .channel('driver-trips')
+      .channel('driver-trips-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'trips' }, () => {
         fetchTrips();
       })
@@ -179,11 +226,65 @@ export function useDriverTrips() {
     };
   }, [fetchTrips]);
 
-  return { trips, isLoading, error, refetch: fetchTrips };
+  return { trips, isLoading, error, refetch: fetchTrips, hasMore };
+}
+
+interface QueuedLocation {
+  tripId: string;
+  lat: number;
+  lng: number;
+  timestamp: number;
+  retries: number;
+}
+
+async function flushGpsQueue() {
+  try {
+    const queueData = await AsyncStorage.getItem(GPS_QUEUE_KEY);
+    if (!queueData) return;
+
+    const queue: QueuedLocation[] = JSON.parse(queueData);
+    if (queue.length === 0) return;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    for (const item of queue) {
+      try {
+        await supabase.rpc('update_trip_location', {
+          p_trip_id: item.tripId,
+          p_lat: item.lat,
+          p_lng: item.lng,
+        });
+      } catch (err) {
+        item.retries++;
+        if (item.retries >= 3) {
+          console.warn('GPS update failed after 3 retries:', item);
+        }
+      }
+    }
+
+    const remaining = queue.filter((q) => q.retries < 3);
+    if (remaining.length > 0) {
+      await AsyncStorage.setItem(GPS_QUEUE_KEY, JSON.stringify(remaining));
+    } else {
+      await AsyncStorage.removeItem(GPS_QUEUE_KEY);
+    }
+  } catch (err) {
+    console.error('Failed to flush GPS queue:', err);
+  }
+}
+
+async function queueLocationUpdate(tripId: string, lat: number, lng: number) {
+  const item: QueuedLocation = { tripId, lat, lng, timestamp: Date.now(), retries: 0 };
+  const existing = await AsyncStorage.getItem(GPS_QUEUE_KEY);
+  const queue: QueuedLocation[] = existing ? JSON.parse(existing) : [];
+  queue.push(item);
+  await AsyncStorage.setItem(GPS_QUEUE_KEY, JSON.stringify(queue));
 }
 
 export function useLocationTracker() {
   const watchRef = useRef<Location.LocationSubscription | null>(null);
+  const isOnlineRef = useRef(true);
 
   const startTracking = useCallback(async (tripId: string) => {
     try {
@@ -200,11 +301,28 @@ export function useLocationTracker() {
         },
         async (location) => {
           const { coords } = location;
-          await supabase.rpc('update_trip_location', {
+
+          if (!isOnlineRef.current) {
+            await queueLocationUpdate(tripId, coords.latitude, coords.longitude);
+            return;
+          }
+
+          const { error } = await supabase.rpc('update_trip_location', {
             p_trip_id: tripId,
             p_lat: coords.latitude,
             p_lng: coords.longitude,
           });
+
+          if (error) {
+            if (error.code === 'NETWORK_ERROR' || !error.code) {
+              isOnlineRef.current = false;
+              await queueLocationUpdate(tripId, coords.latitude, coords.longitude);
+              setTimeout(() => {
+                isOnlineRef.current = true;
+                flushGpsQueue();
+              }, 5000);
+            }
+          }
         }
       );
 

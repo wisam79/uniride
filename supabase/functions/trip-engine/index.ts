@@ -11,43 +11,28 @@ const ALLOWED_ORIGINS = [
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, idempotency-key',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const rateLimiter = new Map<string, { count: number; resetAt: number }>();
-
-function checkRateLimit(userId: string, maxRequests: number, windowMs: number): boolean {
-  const now = Date.now();
-  const entry = rateLimiter.get(userId);
-
-  if (!entry || now > entry.resetAt) {
-    rateLimiter.set(userId, { count: 1, resetAt: now + windowMs });
-    return true;
-  }
-
-  if (entry.count >= maxRequests) {
-    return false;
-  }
-
-  entry.count++;
-  return true;
+function resolveOrigin(origin: string): string {
+  const allowedOrigins = ALLOWED_ORIGINS.split(',');
+  return allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: CORS_HEADERS });
-  }
+  const origin = req.headers.get('Origin') || '';
+  const resolvedOrigin = resolveOrigin(origin);
+  const responseHeaders = {
+    ...CORS_HEADERS,
+    'Access-Control-Allow-Origin': resolvedOrigin,
+    'Content-Type': 'application/json',
+  };
 
   try {
-    const origin = req.headers.get('Origin') || '';
-    const allowedOrigins = ALLOWED_ORIGINS.split(',');
-    const resolvedOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
-    const responseHeaders = {
-      ...CORS_HEADERS,
-      'Access-Control-Allow-Origin': resolvedOrigin,
-      'Content-Type': 'application/json',
-    };
+    if (req.method === 'OPTIONS') {
+      return new Response('ok', { headers: responseHeaders });
+    }
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
@@ -56,6 +41,8 @@ Deno.serve(async (req: Request) => {
         headers: responseHeaders,
       });
     }
+
+    const idempotencyKey = req.headers.get('idempotency-key');
 
     const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
     const token = authHeader.replace('Bearer ', '');
@@ -68,8 +55,14 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    if (!checkRateLimit(user.id, 30, 60000)) {
-      return new Response(JSON.stringify({ error: 'Too many requests' }), {
+    const { data: rateLimitOk, error: rateLimitError } = await supabaseClient.rpc('check_rate_limit', {
+      p_action: 'trip_engine',
+      p_limit: 30,
+      p_window_seconds: 60,
+    });
+
+    if (rateLimitError || !rateLimitOk) {
+      return new Response(JSON.stringify({ error: 'Too many requests. Please try again later.' }), {
         status: 429,
         headers: responseHeaders,
       });
@@ -92,6 +85,13 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    if (typeof lat !== 'number' || typeof lng !== 'number') {
+      return new Response(JSON.stringify({ error: 'lat and lng must be numbers' }), {
+        status: 400,
+        headers: responseHeaders,
+      });
+    }
+
     const { data: driverData, error: driverError } = await supabaseClient
       .from('drivers')
       .select('id')
@@ -103,6 +103,27 @@ Deno.serve(async (req: Request) => {
         status: 403,
         headers: responseHeaders,
       });
+    }
+
+    if (idempotencyKey) {
+      const { data: existingAudit } = await supabaseClient
+        .from('audit_logs')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('action', 'trip_status_change')
+        .eq('resource_id', tripId)
+        .eq('details', JSON.stringify({ idempotencyKey }))
+        .single();
+
+      if (existingAudit) {
+        return new Response(JSON.stringify({
+          success: true,
+          message: 'Status already updated (idempotent response)',
+          idempotent: true,
+        }), {
+          headers: responseHeaders,
+        });
+      }
     }
 
     const { error } = await supabaseClient.rpc('update_trip_status', {
@@ -125,7 +146,7 @@ Deno.serve(async (req: Request) => {
       p_action: 'trip_status_change',
       p_resource: 'trips',
       p_resource_id: tripId,
-      p_details: { newStatus, lat, lng },
+      p_details: { newStatus, lat, lng, idempotencyKey },
     });
 
     return new Response(JSON.stringify({ success: true }), {
@@ -134,7 +155,7 @@ Deno.serve(async (req: Request) => {
   } catch (err) {
     return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
-      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      headers: { ...CORS_HEADERS, 'Access-Control-Allow-Origin': resolvedOrigin, 'Content-Type': 'application/json' },
     });
   }
 });

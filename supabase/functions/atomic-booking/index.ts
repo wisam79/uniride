@@ -11,43 +11,28 @@ const ALLOWED_ORIGINS = [
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, idempotency-key',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const rateLimiter = new Map<string, { count: number; resetAt: number }>();
-
-function checkRateLimit(userId: string, maxRequests: number, windowMs: number): boolean {
-  const now = Date.now();
-  const entry = rateLimiter.get(userId);
-
-  if (!entry || now > entry.resetAt) {
-    rateLimiter.set(userId, { count: 1, resetAt: now + windowMs });
-    return true;
-  }
-
-  if (entry.count >= maxRequests) {
-    return false;
-  }
-
-  entry.count++;
-  return true;
+function resolveOrigin(origin: string): string {
+  const allowedOrigins = ALLOWED_ORIGINS.split(',');
+  return allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: CORS_HEADERS });
-  }
+  const origin = req.headers.get('Origin') || '';
+  const resolvedOrigin = resolveOrigin(origin);
+  const responseHeaders = {
+    ...CORS_HEADERS,
+    'Access-Control-Allow-Origin': resolvedOrigin,
+    'Content-Type': 'application/json',
+  };
 
   try {
-    const origin = req.headers.get('Origin') || '';
-    const allowedOrigins = ALLOWED_ORIGINS.split(',');
-    const resolvedOrigin = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
-    const responseHeaders = {
-      ...CORS_HEADERS,
-      'Access-Control-Allow-Origin': resolvedOrigin,
-      'Content-Type': 'application/json',
-    };
+    if (req.method === 'OPTIONS') {
+      return new Response('ok', { headers: responseHeaders });
+    }
 
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
@@ -56,6 +41,8 @@ Deno.serve(async (req: Request) => {
         headers: responseHeaders,
       });
     }
+
+    const idempotencyKey = req.headers.get('idempotency-key');
 
     const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
     const token = authHeader.replace('Bearer ', '');
@@ -68,8 +55,14 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    if (!checkRateLimit(user.id, 10, 60000)) {
-      return new Response(JSON.stringify({ error: 'Too many requests' }), {
+    const { data: rateLimitOk, error: rateLimitError } = await supabaseClient.rpc('check_rate_limit', {
+      p_action: 'atomic_booking',
+      p_limit: 10,
+      p_window_seconds: 60,
+    });
+
+    if (rateLimitError || !rateLimitOk) {
+      return new Response(JSON.stringify({ error: 'Too many requests. Please try again later.' }), {
         status: 429,
         headers: responseHeaders,
       });
@@ -100,12 +93,39 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    if (idempotencyKey) {
+      const { data: existing } = await supabaseClient
+        .from('subscriptions')
+        .select('id')
+        .eq('student_id', studentId)
+        .eq('route_id', routeId)
+        .eq('status', 'active')
+        .single();
+
+      if (existing) {
+        return new Response(JSON.stringify({
+          success: true,
+          subscriptionId: existing.id,
+          message: 'Seat already reserved (idempotent response)',
+          idempotent: true,
+        }), {
+          headers: responseHeaders,
+        });
+      }
+    }
+
     const { data, error } = await supabaseClient.rpc('reserve_seat', {
       p_route_id: routeId,
       p_student_id: studentId,
     });
 
     if (error) {
+      if (error.message.includes('already subscribed')) {
+        return new Response(JSON.stringify({ success: false, error: error.message }), {
+          status: 409,
+          headers: responseHeaders,
+        });
+      }
       return new Response(JSON.stringify({ success: false, error: error.message }), {
         status: 400,
         headers: responseHeaders,
@@ -117,16 +137,20 @@ Deno.serve(async (req: Request) => {
       p_action: 'book_seat',
       p_resource: 'subscriptions',
       p_resource_id: data,
-      p_details: { routeId, studentId },
+      p_details: { routeId, studentId, idempotencyKey },
     });
 
-    return new Response(JSON.stringify({ success: true, subscriptionId: data, message: 'Seat reserved successfully' }), {
+    return new Response(JSON.stringify({
+      success: true,
+      subscriptionId: data,
+      message: 'Seat reserved successfully',
+    }), {
       headers: responseHeaders,
     });
   } catch (err) {
     return new Response(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
-      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      headers: { ...CORS_HEADERS, 'Access-Control-Allow-Origin': resolvedOrigin, 'Content-Type': 'application/json' },
     });
   }
 });

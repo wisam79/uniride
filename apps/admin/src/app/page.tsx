@@ -1,28 +1,19 @@
 "use client";
 
-import { Authenticated, useLogout, useList } from "@refinedev/core";
+import { useEffect, useState } from "react";
+import { Authenticated, useLogout, useCustom } from "@refinedev/core";
 import { Box, Card, CardContent, Typography, Grid } from "@mui/material";
 
-interface ProfileRecord {
-  id: string;
-  role: string;
-  fullName: string;
-}
-
-interface RouteRecord {
-  id: string;
-  isActive: boolean;
-  price: number;
-}
-
-interface TripRecord {
-  id: string;
-  status: string;
-}
-
-interface SubscriptionRecord {
-  id: string;
-  status: string;
+interface DashboardStats {
+  total_users: number;
+  total_drivers: number;
+  total_routes: number;
+  active_routes: number;
+  total_trips: number;
+  active_trips: number;
+  total_subscriptions: number;
+  active_subscriptions: number;
+  monthly_revenue: number;
 }
 
 function StatCard({ title, value, color }: { title: string; value: string | number; color: string }) {
@@ -33,7 +24,7 @@ function StatCard({ title, value, color }: { title: string; value: string | numb
           {title}
         </Typography>
         <Typography variant="h4" sx={{ color, fontWeight: "bold" }}>
-          {value}
+          {typeof value === 'number' ? value.toLocaleString() : value}
         </Typography>
       </CardContent>
     </Card>
@@ -42,20 +33,32 @@ function StatCard({ title, value, color }: { title: string; value: string | numb
 
 export default function Page() {
   const { mutate: logout } = useLogout();
+  const [stats, setStats] = useState<DashboardStats | null>(null);
 
-  const { data: routesData } = useList({ resource: "routes", pagination: { pageSize: 0 } });
-  const { data: tripsData } = useList({ resource: "trips", pagination: { pageSize: 0 } });
-  const { data: profilesData } = useList({ resource: "profiles", pagination: { pageSize: 0 } });
-  const { data: subscriptionsData } = useList({ resource: "subscriptions", pagination: { pageSize: 0 } });
+  const { data, isLoading, error } = useCustom<{ data: DashboardStats }>({
+    url: 'rest/v1/rpc/get_dashboard_stats',
+    method: 'get',
+    config: {
+      headers: {
+        'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${typeof window !== 'undefined' ? localStorage?.getItem('sb-access-token') || '' : ''}`,
+      },
+    },
+  });
 
-  const totalRoutes = routesData?.total ?? 0;
-  const activeRoutes = routesData?.data?.filter((r: RouteRecord) => r.isActive)?.length ?? 0;
-  const totalTrips = tripsData?.total ?? 0;
-  const activeTrips = tripsData?.data?.filter((t: TripRecord) => t.status === "in_transit" || t.status === "driver_waiting")?.length ?? 0;
-  const totalUsers = profilesData?.total ?? 0;
-  const totalDrivers = profilesData?.data?.filter((p: ProfileRecord) => p.role === "driver")?.length ?? 0;
-  const activeSubscriptions = subscriptionsData?.data?.filter((s: SubscriptionRecord) => s.status === "active")?.length ?? 0;
-  const totalRevenue = routesData?.data?.reduce((sum: number, r: RouteRecord) => sum + (r.isActive ? r.price : 0), 0) ?? 0;
+  useEffect(() => {
+    if (data?.data?.data) {
+      setStats(data.data.data);
+    }
+  }, [data]);
+
+  if (isLoading || !stats) {
+    return (
+      <Box sx={{ p: 4 }}>
+        <Typography>Loading dashboard...</Typography>
+      </Box>
+    );
+  }
 
   return (
     <Authenticated key="dashboard" fallback={<div>Loading or redirecting...</div>}>
@@ -74,32 +77,32 @@ export default function Page() {
 
         <Grid container spacing={3}>
           <Grid item xs={12} sm={6} md={3}>
-            <StatCard title="Total Users" value={totalUsers} color="#007AFF" />
+            <StatCard title="Total Users" value={stats.total_users} color="#007AFF" />
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
-            <StatCard title="Active Drivers" value={totalDrivers} color="#34C759" />
+            <StatCard title="Active Drivers" value={stats.total_drivers} color="#34C759" />
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
-            <StatCard title="Active Routes" value={activeRoutes} color="#5856D6" />
+            <StatCard title="Active Routes" value={stats.active_routes} color="#5856D6" />
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
-            <StatCard title="Active Trips" value={activeTrips} color="#FF9500" />
+            <StatCard title="Active Trips" value={stats.active_trips} color="#FF9500" />
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
-            <StatCard title="Total Routes" value={totalRoutes} color="#007AFF" />
+            <StatCard title="Total Routes" value={stats.total_routes} color="#007AFF" />
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
-            <StatCard title="Total Trips" value={totalTrips} color="#34C759" />
+            <StatCard title="Total Trips" value={stats.total_trips} color="#34C759" />
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
-            <StatCard title="Active Subscriptions" value={activeSubscriptions} color="#5856D6" />
+            <StatCard title="Active Subscriptions" value={stats.active_subscriptions} color="#5856D6" />
           </Grid>
           <Grid item xs={12} sm={6} md={3}>
-            <StatCard title="Revenue (IQD)" value={totalRevenue.toLocaleString()} color="#FF9500" />
+            <StatCard title="Monthly Revenue (IQD)" value={stats.monthly_revenue.toLocaleString()} color="#FF9500" />
           </Grid>
         </Grid>
 
-        {activeTrips > 0 && (
+        {stats.active_trips > 0 && (
           <Box sx={{ mt: 4 }}>
             <Typography variant="h6" fontWeight="bold" sx={{ mb: 2 }}>
               Live Trips
@@ -107,7 +110,7 @@ export default function Page() {
             <Card>
               <CardContent>
                 <Typography color="textSecondary">
-                  {activeTrips} trip(s) currently active. View details in the Trips section.
+                  {stats.active_trips} trip(s) currently active. View details in the Trips section.
                 </Typography>
               </CardContent>
             </Card>

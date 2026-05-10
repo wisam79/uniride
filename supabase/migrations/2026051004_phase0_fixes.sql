@@ -52,17 +52,23 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION handle_subscription_change()
 RETURNS TRIGGER AS $$
 BEGIN
-  IF TG_OP = 'UPDATE' AND OLD.status != NEW.status AND NEW.status = 'cancelled' THEN
+  IF TG_OP = 'UPDATE'
+     AND OLD.status IN ('active', 'pending')
+     AND NEW.status IN ('cancelled', 'expired') THEN
     UPDATE routes SET available_seats = available_seats + 1
     WHERE id = OLD.route_id;
   END IF;
-  RETURN NEW;
+  IF TG_OP = 'DELETE' AND OLD.status IN ('active', 'pending') THEN
+    UPDATE routes SET available_seats = available_seats + 1
+    WHERE id = OLD.route_id;
+  END IF;
+  RETURN COALESCE(NEW, OLD);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 DROP TRIGGER IF EXISTS on_subscription_cancel ON subscriptions;
 CREATE TRIGGER on_subscription_cancel
-  AFTER UPDATE ON subscriptions
+  AFTER UPDATE OR DELETE ON subscriptions
   FOR EACH ROW EXECUTE FUNCTION handle_subscription_change();
 
 -- ============================================================

@@ -71,8 +71,8 @@ export const TripSchema = z.object({
   scheduled_at: z.string(),
   started_at: z.string().nullable(),
   ended_at: z.string().nullable(),
-  last_lat: z.string().nullable(),
-  last_lng: z.string().nullable(),
+  last_lat: z.number().nullable(),
+  last_lng: z.number().nullable(),
 });
 export type Trip = z.infer<typeof TripSchema>;
 

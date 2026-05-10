@@ -16,8 +16,8 @@ export const authProvider: AuthBindings = {
     }
 
     if (data?.session) {
-      // Only allow admins
-      const role = data.user?.user_metadata?.role;
+      // Only allow admins - use app_metadata (not user_metadata which is client-writable)
+      const role = data.user?.app_metadata?.role;
       if (role !== "admin") {
         await supabaseClient.auth.signOut();
         return {
@@ -57,8 +57,8 @@ export const authProvider: AuthBindings = {
       return { authenticated: false, redirectTo: "/login" };
     }
     
-    // Check if user is admin
-    const role = session.user?.user_metadata?.role;
+    // Check if user is admin - use app_metadata for security
+    const role = session.user?.app_metadata?.role;
     if (role !== "admin") {
       return { authenticated: false, redirectTo: "/login", logout: true };
     }
@@ -68,7 +68,7 @@ export const authProvider: AuthBindings = {
   getPermissions: async () => {
     const { data } = await supabaseClient.auth.getUser();
     if (data?.user) {
-      return data.user.user_metadata?.role;
+      return data.user.app_metadata?.role;
     }
     return null;
   },
