@@ -19,7 +19,7 @@ jobs:
       - name: Find PR with auto-merge label
         id: find-pr
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
           BRANCH="${{ github.event.workflow_run.head_branch }}"
 
@@ -46,26 +46,34 @@ jobs:
           echo "number=$PR_NUMBER" >> $GITHUB_OUTPUT
           echo "Found PR #$PR_NUMBER with auto-merge label"
 
+      - name: Wait for CI checks to settle
+        if: steps.find-pr.outputs.found == 'true'
+        run: sleep 10
+
       - name: Verify all CI checks passed
         if: steps.find-pr.outputs.found == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER="${{ steps.find-pr.outputs.number }}"
-          STATUS=$(gh pr checks "$PR_NUMBER" 2>/dev/null || echo "failed")
 
-          if echo "$STATUS" | grep -qi "fail\|pending\|neutral"; then
-            echo "Not all checks passed or still pending:"
-            echo "$STATUS"
-            exit 1
-          fi
+          for i in 1 2 3; do
+            STATUS=$(gh pr checks "$PR_NUMBER" 2>/dev/null || echo "failed")
+            if ! echo "$STATUS" | grep -qi "fail\|pending\|neutral"; then
+              echo "All checks passed for PR #$PR_NUMBER"
+              exit 0
+            fi
+            echo "Attempt $i: checks still pending or failed, waiting..."
+            sleep 15
+          done
 
-          echo "All checks passed for PR #$PR_NUMBER"
+          echo "Checks did not pass after retries"
+          exit 1
 
       - name: Merge Pull Request
         if: steps.find-pr.outputs.found == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER="${{ steps.find-pr.outputs.number }}"
           echo "Auto-merging PR #$PR_NUMBER (squash)..."

@@ -26,7 +26,7 @@ jobs:
       - name: Check for existing PR
         id: check
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
           BRANCH="${{ steps.branch.outputs.name }}"
           EXISTING=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
@@ -41,7 +41,7 @@ jobs:
         if: steps.check.outputs.exists == 'false'
         id: create
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
           BRANCH="${{ steps.branch.outputs.name }}"
           COMMIT_MSG=$(git log -1 --format='%s')
@@ -67,7 +67,7 @@ jobs:
       - name: Add auto-merge label
         if: steps.check.outputs.exists == 'false'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER="${{ steps.create.outputs.number }}"
           gh pr edit "$PR_NUMBER" --add-label "auto-merge"
