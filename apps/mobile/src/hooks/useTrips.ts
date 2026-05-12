@@ -116,28 +116,9 @@ export function useActiveTrips() {
 
     const channel = supabase
       .channel('trips-active-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'trips' }, (payload) => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'trips' }, () => {
         if (!isMounted) return;
-        const newTrip = payload.new as Trip;
-        const oldTrip = payload.old as { id: string } | undefined;
-
-        if (payload.eventType === 'INSERT' &&
-            ['driver_waiting', 'in_transit'].includes(newTrip.status)) {
-          setTrips((prev) => {
-            if (prev.find((t) => t.id === newTrip.id)) return prev;
-            return [newTrip, ...prev];
-          });
-        } else if (payload.eventType === 'UPDATE') {
-          if (['completed', 'cancelled', 'absent'].includes(newTrip.status)) {
-            setTrips((prev) => prev.filter((t) => t.id !== newTrip.id));
-          } else {
-            setTrips((prev) =>
-              prev.map((t) => (t.id === newTrip.id ? newTrip : t))
-            );
-          }
-        } else if (payload.eventType === 'DELETE' && oldTrip) {
-          setTrips((prev) => prev.filter((t) => t.id !== oldTrip.id));
-        }
+        fetchTrips();
       })
       .subscribe((status) => {
         // Auto-reconnect on channel error or timeout
@@ -184,11 +165,29 @@ export function useTripTracking(tripId: string | null) {
       setIsLoading(true);
       const { data, error } = await supabase
         .from('trips')
-        .select('*, routes(start_lat, start_lng, end_lat, end_lng, title), driver:profiles!driver_id(full_name, phone)')
+        .select('*, routes(start_lat, start_lng, end_lat, end_lng, title)')
         .eq('id', tripId)
         .single();
       if (error) throw error;
-      setTrip(data as unknown as TripWithRoute);
+      const baseTrip = data as TripWithRoute;
+
+      let driver: TripWithRoute['driver'] = null;
+      if (baseTrip.driver_id) {
+        const { data: driverRecord } = await supabase
+          .from('drivers')
+          .select('profiles!drivers_user_id_fkey(full_name, phone)')
+          .eq('id', baseTrip.driver_id)
+          .single();
+
+        const profileRow = Array.isArray(driverRecord?.profiles)
+          ? driverRecord.profiles[0]
+          : driverRecord?.profiles;
+        driver = profileRow
+          ? { full_name: profileRow.full_name ?? '', phone: profileRow.phone ?? '' }
+          : null;
+      }
+
+      setTrip({ ...baseTrip, driver });
     } catch (err: unknown) {
       setError(getErrorMessage(err));
     } finally {

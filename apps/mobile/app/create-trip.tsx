@@ -29,11 +29,18 @@ export default function CreateTripScreen() {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
+        const { data: driverData, error: driverError } = await supabase
+          .from('drivers')
+          .select('id')
+          .eq('user_id', user.id)
+          .single();
+        if (driverError || !driverData) throw driverError || new Error('Driver profile not found');
+
         // Fetch routes assigned to this driver
         const { data, error } = await supabase
           .from('routes')
           .select('*')
-          .eq('driver_id', user.id)
+          .eq('driver_id', driverData.id)
           .eq('is_active', true);
 
         if (error) throw error;

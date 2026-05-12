@@ -9,25 +9,15 @@ import {
   ScrollView,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { supabase } from '../src/lib/supabase';
 import { useRouteById } from '../src/hooks/useRoutes';
 import { useBookingStore } from '../src/hooks/useStore';
-import { useTranslation } from '../src/hooks/useTranslation';
-import { BookingRequest } from '@uniride/core';
 import { Colors, FontFamily, Spacing, BorderRadius, Shadow } from '../src/theme';
 import { Ionicons } from '@expo/vector-icons';
-
-function getErrorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  if (typeof err === 'string') return err;
-  return 'حدث خطأ غير معروف';
-}
 
 export default function BookingScreen() {
   const { routeId } = useLocalSearchParams<{ routeId: string }>();
   const { route, isLoading } = useRouteById(routeId || null);
   const { isBooking, setBooking, setBookingResult } = useBookingStore();
-  const { t, isRTL } = useTranslation();
   const router = useRouter();
   const lastPressRef = useRef(0);
 
@@ -38,40 +28,14 @@ export default function BookingScreen() {
 
     if (isBooking) return;
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      Alert.alert('تنبيه', 'يجب تسجيل الدخول أولاً');
-      return;
-    }
-
-    const parsed = BookingRequest.safeParse({ routeId, studentId: user.id });
-    if (!parsed.success) {
-      Alert.alert('فشل الحجز', parsed.error.issues.map((i) => i.message).join(', '));
-      return;
-    }
-
     setBooking(true);
-
-    try {
-      const { data, error } = await supabase.functions.invoke('atomic-booking', {
-        body: { routeId, studentId: user.id },
-      });
-
-      if (error) {
-        setBookingResult(null, error.message);
-        Alert.alert('فشل الحجز', error.message);
-      } else {
-        setBookingResult(data?.subscriptionId || 'success', null);
-        Alert.alert('نجاح', 'تم حجز المقعد بنجاح', [
-          { text: 'حسناً', onPress: () => router.push('/subscriptions') },
-        ]);
-      }
-    } catch (err: unknown) {
-      const msg = getErrorMessage(err);
-      setBookingResult(null, msg);
-      Alert.alert('فشل الحجز', msg);
-    }
-  }, [routeId, isBooking, router]);
+    setBookingResult(null, null);
+    setBooking(false);
+    Alert.alert('التفعيل مطلوب', 'الحجز يتم عبر كود ترخيص. افتح شاشة التفعيل الآن.', [
+      { text: 'إلغاء', style: 'cancel' },
+      { text: 'فتح التفعيل', onPress: () => router.push('/activate') },
+    ]);
+  }, [isBooking, router, setBooking, setBookingResult]);
 
   if (isLoading) {
     return (
@@ -140,7 +104,7 @@ export default function BookingScreen() {
           <>
             <Ionicons name="ticket-outline" size={20} color={Colors.white} style={{ position: 'absolute', right: Spacing.xl }} />
             <Text style={styles.bookButtonText}>
-              {route.available_seats <= 0 ? 'لا توجد مقاعد متاحة' : 'تأكيد الحجز'}
+              {route.available_seats <= 0 ? 'لا توجد مقاعد متاحة' : 'تفعيل الترخيص'}
             </Text>
           </>
         )}

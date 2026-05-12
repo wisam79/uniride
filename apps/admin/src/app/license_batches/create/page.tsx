@@ -3,8 +3,16 @@
 import { Create } from "@refinedev/mui";
 import { Box, TextField, MenuItem, Autocomplete, Alert } from "@mui/material";
 import { useForm } from "@refinedev/react-hook-form";
-import { useSelect, useApiUrl, useCustomMutation } from "@refinedev/core";
+import { useSelect, useApiUrl, useCustomMutation, BaseRecord, HttpError } from "@refinedev/core";
 import { supabaseClient } from "../../../providers/supabaseClient";
+
+interface LicenseBatchFormValues {
+  batch_name: string;
+  route_id: string;
+  quantity: number;
+  price: number;
+  valid_days: number;
+}
 
 export default function LicenseBatchCreate() {
   const {
@@ -14,7 +22,7 @@ export default function LicenseBatchCreate() {
     handleSubmit,
     control,
     formState: { errors },
-  } = useForm();
+  } = useForm<BaseRecord, HttpError, LicenseBatchFormValues>();
 
   const { options: routeOptions } = useSelect({
     resource: "routes",
@@ -24,7 +32,7 @@ export default function LicenseBatchCreate() {
 
   const { mutate } = useCustomMutation();
 
-  const handleCustomSubmit = async (data: any) => {
+  const handleCustomSubmit = async (data: LicenseBatchFormValues) => {
     // Call the RPC to create a batch securely and generate the codes
     try {
       const { data: batchId, error } = await supabaseClient.rpc("create_license_batch", {
@@ -42,8 +50,12 @@ export default function LicenseBatchCreate() {
       
       // Redirect back manually since we used custom mutation
       window.location.href = "/license_batches";
-    } catch (e: any) {
-      alert(`Error: ${e.message}`);
+    } catch (e: unknown) {
+      if (e instanceof Error) {
+        alert(`Error: ${e.message}`);
+      } else {
+        alert("An unknown error occurred");
+      }
     }
   };
 
@@ -52,8 +64,8 @@ export default function LicenseBatchCreate() {
       <Box component="form" sx={{ display: "flex", flexDirection: "column" }} autoComplete="off">
         <TextField
           {...register("batch_name", { required: "This field is required" })}
-          error={!!(errors as any)?.batch_name}
-          helperText={(errors as any)?.batch_name?.message}
+          error={!!errors?.batch_name}
+          helperText={errors?.batch_name?.message}
           margin="normal"
           fullWidth
           InputLabelProps={{ shrink: true }}
@@ -65,8 +77,8 @@ export default function LicenseBatchCreate() {
         <TextField
           select
           {...register("route_id", { required: "This field is required" })}
-          error={!!(errors as any)?.route_id}
-          helperText={(errors as any)?.route_id?.message}
+          error={!!errors?.route_id}
+          helperText={errors?.route_id?.message}
           margin="normal"
           fullWidth
           InputLabelProps={{ shrink: true }}
@@ -83,8 +95,8 @@ export default function LicenseBatchCreate() {
 
         <TextField
           {...register("quantity", { required: "This field is required", min: 1 })}
-          error={!!(errors as any)?.quantity}
-          helperText={(errors as any)?.quantity?.message}
+          error={!!errors?.quantity}
+          helperText={errors?.quantity?.message}
           margin="normal"
           fullWidth
           InputLabelProps={{ shrink: true }}
@@ -95,8 +107,8 @@ export default function LicenseBatchCreate() {
 
         <TextField
           {...register("price", { required: "This field is required", min: 0 })}
-          error={!!(errors as any)?.price}
-          helperText={(errors as any)?.price?.message}
+          error={!!errors?.price}
+          helperText={errors?.price?.message}
           margin="normal"
           fullWidth
           InputLabelProps={{ shrink: true }}
@@ -107,8 +119,8 @@ export default function LicenseBatchCreate() {
 
         <TextField
           {...register("valid_days", { required: "This field is required", min: 1 })}
-          error={!!(errors as any)?.valid_days}
-          helperText={(errors as any)?.valid_days?.message}
+          error={!!errors?.valid_days}
+          helperText={errors?.valid_days?.message}
           margin="normal"
           fullWidth
           InputLabelProps={{ shrink: true }}

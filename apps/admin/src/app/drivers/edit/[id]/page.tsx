@@ -5,6 +5,16 @@ import { Box, TextField, Checkbox, FormControlLabel } from "@mui/material";
 import { useForm } from "@refinedev/react-hook-form";
 import { Controller } from "react-hook-form";
 
+import { BaseRecord, HttpError } from "@refinedev/core";
+
+interface DriverEditFormValues {
+  license_number: string;
+  vehicle_model: string;
+  vehicle_plate: string;
+  capacity: number;
+  is_verified: boolean;
+}
+
 export default function DriverEdit() {
   const {
     saveButtonProps,
@@ -12,7 +22,7 @@ export default function DriverEdit() {
     register,
     control,
     formState: { errors },
-  } = useForm();
+  } = useForm<BaseRecord, HttpError, DriverEditFormValues>();
 
   const driverData = queryResult?.data?.data;
   const currentUserId = driverData?.user_id;
@@ -37,8 +47,8 @@ export default function DriverEdit() {
           {...register("license_number", {
             required: "This field is required",
           })}
-          error={!!(errors as any)?.license_number}
-          helperText={(errors as any)?.license_number?.message}
+          error={!!(errors)?.license_number}
+          helperText={(errors)?.license_number?.message}
           margin="normal"
           fullWidth
           InputLabelProps={{ shrink: true }}
@@ -50,8 +60,8 @@ export default function DriverEdit() {
           {...register("vehicle_model", {
             required: "This field is required",
           })}
-          error={!!(errors as any)?.vehicle_model}
-          helperText={(errors as any)?.vehicle_model?.message}
+          error={!!(errors)?.vehicle_model}
+          helperText={(errors)?.vehicle_model?.message}
           margin="normal"
           fullWidth
           InputLabelProps={{ shrink: true }}
@@ -63,8 +73,8 @@ export default function DriverEdit() {
           {...register("vehicle_plate", {
             required: "This field is required",
           })}
-          error={!!(errors as any)?.vehicle_plate}
-          helperText={(errors as any)?.vehicle_plate?.message}
+          error={!!(errors)?.vehicle_plate}
+          helperText={(errors)?.vehicle_plate?.message}
           margin="normal"
           fullWidth
           InputLabelProps={{ shrink: true }}
@@ -78,8 +88,8 @@ export default function DriverEdit() {
             valueAsNumber: true,
             validate: (value) => value >= 1 || "Capacity must be at least 1",
           })}
-          error={!!(errors as any)?.capacity}
-          helperText={(errors as any)?.capacity?.message}
+          error={!!(errors)?.capacity}
+          helperText={(errors)?.capacity?.message}
           margin="normal"
           fullWidth
           InputLabelProps={{ shrink: true }}
