@@ -71,6 +71,8 @@ jobs:
             SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             ADMIN_URL="${{ secrets.ADMIN_URL }}" \
             ZAINCASH_SECRET="${{ secrets.ZAINCASH_SECRET }}" \
+            ZAINCASH_MSISDN="${{ secrets.ZAINCASH_MSISDN }}" \
+            ZAINCASH_MERCHANT_ID="${{ secrets.ZAINCASH_MERCHANT_ID }}" \
             --project-ref "$PROJECT_REF"
 
       - name: Verify Deployment

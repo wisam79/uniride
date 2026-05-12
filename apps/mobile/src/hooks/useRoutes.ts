@@ -14,7 +14,7 @@ export function useRoutes(institutionId?: string | null, page = 0) {
     try {
       setIsLoading(true);
       const from = page * PAGE_SIZE;
-      
+
       let query = supabase
         .from('routes')
         .select('*', { count: 'exact' })
@@ -30,15 +30,24 @@ export function useRoutes(institutionId?: string | null, page = 0) {
 
       if (error) throw error;
       const newRoutes = data || [];
-      setRoutes(page === 0 ? newRoutes : (prev) => {
-        const existingIds = new Set(prev.map((r) => r.id));
-        const unique = newRoutes.filter((r) => !existingIds.has(r.id));
-        return [...prev, ...unique];
-      });
+      setRoutes(
+        page === 0
+          ? newRoutes
+          : (prev) => {
+              const existingIds = new Set(prev.map((r) => r.id));
+              const unique = newRoutes.filter((r) => !existingIds.has(r.id));
+              return [...prev, ...unique];
+            },
+      );
       setHasMore(newRoutes.length === PAGE_SIZE && (!count || from + PAGE_SIZE < count));
       setError(null);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : typeof err === 'string' ? err : 'Failed to fetch routes';
+      const msg =
+        err instanceof Error
+          ? err.message
+          : typeof err === 'string'
+            ? err
+            : 'Failed to fetch routes';
       setError(msg);
     } finally {
       setIsLoading(false);
@@ -68,31 +77,31 @@ export function useRouteById(routeId: string | null) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchRoute = useCallback(async () => {
     if (!routeId) {
       setIsLoading(false);
       return;
     }
+    try {
+      setIsLoading(true);
+      const { data, error } = await supabase.from('routes').select('*').eq('id', routeId).single();
 
-    async function fetchRoute() {
-      try {
-        setIsLoading(true);
-        const { data, error } = await supabase
-          .from('routes')
-          .select('*')
-          .eq('id', routeId)
-          .single();
-
-        if (error) throw error;
-        setRoute(data);
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : typeof err === 'string' ? err : 'Failed to fetch route';
-        setError(msg);
-      } finally {
-        setIsLoading(false);
-      }
+      if (error) throw error;
+      setRoute(data);
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : typeof err === 'string'
+            ? err
+            : 'Failed to fetch route';
+      setError(msg);
+    } finally {
+      setIsLoading(false);
     }
+  }, [routeId]);
 
+  useEffect(() => {
     fetchRoute();
 
     const channel = supabase
@@ -100,14 +109,22 @@ export function useRouteById(routeId: string | null) {
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'routes', filter: `id=eq.${routeId}` },
-        (payload) => setRoute(payload.new as Route)
+        () => {
+          // ✅ Re-fetch كامل — لا ندمج payload.new مباشرة (قد يفقد بيانات)
+          fetchRoute();
+        },
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('[Realtime] route channel error, re-fetching...');
+          fetchRoute();
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [routeId]);
+  }, [routeId, fetchRoute]);
 
-  return { route, isLoading, error };
+  return { route, isLoading, error, refetch: fetchRoute };
 }

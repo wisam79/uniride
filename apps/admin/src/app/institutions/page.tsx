@@ -1,22 +1,20 @@
 'use client';
 
-import { useDataGrid, List, EditButton, ShowButton } from '@refinedev/mui';
+import {
+  List,
+  useDataGrid,
+  EditButton,
+  ShowButton,
+  DeleteButton,
+  CreateButton,
+} from '@refinedev/mui';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import React from 'react';
-import { Stack, Chip } from '@mui/material';
+import { Stack } from '@mui/material';
 
-const ROLE_COLORS: Record<
-  string,
-  'default' | 'primary' | 'success' | 'error' | 'warning' | 'info'
-> = {
-  admin: 'error',
-  student: 'primary',
-  driver: 'success',
-};
-
-export default function ProfileList() {
+export default function InstitutionList() {
   const { dataGridProps } = useDataGrid({
-    resource: 'profiles',
+    resource: 'institutions',
   });
 
   const columns = React.useMemo<GridColDef[]>(
@@ -29,33 +27,26 @@ export default function ProfileList() {
         flex: 1,
       },
       {
-        field: 'full_name',
-        headerName: 'Full Name',
+        field: 'name',
+        headerName: 'Name',
         type: 'string',
-        minWidth: 180,
+        minWidth: 220,
         flex: 1,
       },
       {
-        field: 'phone',
-        headerName: 'Phone',
+        field: 'city',
+        headerName: 'City',
         type: 'string',
         minWidth: 150,
         flex: 1,
-      },
-      {
-        field: 'role',
-        headerName: 'Role',
-        type: 'string',
-        minWidth: 120,
-        flex: 0.5,
         renderCell: function render({ value }) {
-          return <Chip label={value} color={ROLE_COLORS[value] || 'default'} size="small" />;
+          return value ?? '-';
         },
       },
       {
         field: 'created_at',
-        headerName: 'Joined',
-        minWidth: 180,
+        headerName: 'Created',
+        minWidth: 160,
         flex: 1,
         renderCell: function render({ value }) {
           return value ? new Date(value).toLocaleDateString() : '-';
@@ -74,20 +65,22 @@ export default function ProfileList() {
               justifyContent="center"
               height="100%"
             >
+              <EditButton hideText recordItemId={row.id} />
               <ShowButton hideText recordItemId={row.id} />
+              <DeleteButton hideText recordItemId={row.id} />
             </Stack>
           );
         },
         align: 'center',
         headerAlign: 'center',
-        minWidth: 80,
+        minWidth: 150,
       },
     ],
     [],
   );
 
   return (
-    <List>
+    <List headerButtons={<CreateButton />}>
       <DataGrid {...dataGridProps} columns={columns} autoHeight />
     </List>
   );
