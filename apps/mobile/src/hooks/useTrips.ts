@@ -34,7 +34,9 @@ export function useSubscriptions(page = 0) {
   const fetchSubscriptions = useCallback(async () => {
     try {
       setIsLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) {
         // Try to load offline
         const offlineSub = await OfflineCache.getActiveSubscription();
@@ -57,7 +59,7 @@ export function useSubscriptions(page = 0) {
 
       // Cache active subscription for offline use
       if (page === 0) {
-        const activeSub = newSubs.find(s => s.status === 'active');
+        const activeSub = newSubs.find((s) => s.status === 'active');
         await OfflineCache.saveActiveSubscription(activeSub || null);
       }
     } catch (err: unknown) {
@@ -90,7 +92,9 @@ export function useActiveTrips() {
   const fetchTrips = useCallback(async () => {
     try {
       setIsLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return;
 
       const { data, error } = await supabase
@@ -206,7 +210,7 @@ export function useTripTracking(tripId: string | null) {
         () => {
           // Re-fetch full trip with joins — ensures driver/route data stays fresh
           fetchTrip();
-        }
+        },
       )
       .subscribe((status) => {
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
@@ -232,10 +236,28 @@ export function useDriverTrips(page = 0) {
   const fetchTrips = useCallback(async () => {
     try {
       setIsLoading(true);
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // ✅ احصل على drivers.id أولاً — لا تستخدم auth.uid() مباشرة
+      const { data: driverData, error: driverError } = await supabase
+        .from('drivers')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (driverError || !driverData) {
+        throw new Error('Driver profile not found');
+      }
+
       const from = page * PAGE_SIZE;
       const { data, error, count } = await supabase
         .from('trips')
         .select('*, routes(*)', { count: 'exact' })
+        .eq('driver_id', driverData.id) // ✅ فلتر على السائق الحالي فقط
         .order('scheduled_at', { ascending: false })
         .range(from, from + PAGE_SIZE - 1);
 
@@ -289,27 +311,41 @@ async function flushGpsQueue() {
     const queue: QueuedLocation[] = JSON.parse(queueData);
     if (queue.length === 0) return;
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return;
+
+    const failed: QueuedLocation[] = [];
 
     for (const item of queue) {
       try {
-        await supabase.rpc('update_trip_location', {
+        const { error } = await supabase.rpc('update_trip_location', {
           p_trip_id: item.tripId,
           p_lat: item.lat,
           p_lng: item.lng,
         });
+
+        if (error) {
+          // فشل — أعد المحاولة إذا لم نتجاوز الحد
+          item.retries++;
+          if (item.retries < 3) {
+            failed.push(item);
+          } else {
+            console.warn('[GPS Queue] Dropping item after 3 retries:', item);
+          }
+        }
+        // ✅ نجح — لا نضيفه لـ failed (يُحذف تلقائياً)
       } catch (err) {
         item.retries++;
-        if (item.retries >= 3) {
-          console.warn('GPS update failed after 3 retries:', item);
+        if (item.retries < 3) {
+          failed.push(item);
         }
       }
     }
 
-    const remaining = queue.filter((q) => q.retries < 3);
-    if (remaining.length > 0) {
-      await AsyncStorage.setItem(GPS_QUEUE_KEY, JSON.stringify(remaining));
+    if (failed.length > 0) {
+      await AsyncStorage.setItem(GPS_QUEUE_KEY, JSON.stringify(failed));
     } else {
       await AsyncStorage.removeItem(GPS_QUEUE_KEY);
     }
@@ -317,6 +353,9 @@ async function flushGpsQueue() {
     console.warn('Failed to flush GPS queue:', err);
   }
 }
+
+// ✅ exported for testing only
+export { flushGpsQueue as flushGpsQueueForTest };
 
 async function queueLocationUpdate(tripId: string, lat: number, lng: number) {
   const item: QueuedLocation = { tripId, lat, lng, timestamp: Date.now(), retries: 0 };
@@ -367,7 +406,7 @@ export function useLocationTracker() {
               }, 5000);
             }
           }
-        }
+        },
       );
 
       return { error: null };

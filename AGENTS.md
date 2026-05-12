@@ -51,12 +51,13 @@ $$ LANGUAGE sql;
 
 ### 3.1 Supabase Migrations فقط (لا Drizzle)
 
-| النظام | الاستخدام | مصدر؟ |
-|--------|----------|--------|
+| النظام                  | الاستخدام                     | مصدر؟                     |
+| ----------------------- | ----------------------------- | ------------------------- |
 | **Supabase Migrations** | التطبيق الفعلي على production | **المصدر الوحيد للحقيقة** |
-| ~~Drizzle Kit~~ | ~~محذوف~~ | ❌ |
+| ~~Drizzle Kit~~         | ~~محذوف~~                     | ❌                        |
 
 **مهم جداً:**
+
 - اكتب Migration جديد في `supabase/migrations/` → ثم ارفعه للإنتاج
 - `supabase db push` تقرأ من `supabase/migrations/`
 
@@ -74,13 +75,14 @@ Pattern: YYYYMMDDNN_description.sql
 
 ```typescript
 // ❌ خطأ — يجلب كل السجلات (أداء سيئ)
-useList({ resource: 'profiles', pagination: { pageSize: 0 } })
+useList({ resource: 'profiles', pagination: { pageSize: 0 } });
 
 // ✅ صحيح — استخدم RPC مُحسّن
-supabase.rpc('get_dashboard_stats')
+supabase.rpc('get_dashboard_stats');
 ```
 
 **RPCs الموجودة:**
+
 - `get_dashboard_stats()` → إحصائيات Dashboard
 - `ping()` → فحص الشبكة
 - `submit_rating()` → تقييم رحلة
@@ -299,26 +301,27 @@ deploy.yml: supabase db push + deploy 4 edge functions + set secrets
 
 ## 14. ❌ لا تفعل
 
-| ❌ لا تفعل | ✅ افعل بدلاً من ذلك |
-|-----------|---------------------|
-| `user_metadata.role` | `app_metadata.role` |
-| `pageSize: 0` | RPC مُحسّن |
-| `Map()` للـ rate limiting | `rate_limits` table |
-| `routes` query للشبكة | `ping()` RPC |
-| استخدام `packages/db` | كتابة migration جديد |
-| `console.log` | `console.warn` |
-| `COALESCE` مع `user_metadata` في SQL | `app_metadata` فقط |
-| دمج `payload.new` في Realtime | إعادة fetch كامل |
-| `reserve_seat()` | `activate_license()` |
+| ❌ لا تفعل                           | ✅ افعل بدلاً من ذلك                     |
+| ------------------------------------ | ---------------------------------------- |
+| `user_metadata.role`                 | `app_metadata.role`                      |
+| `pageSize: 0`                        | RPC مُحسّن                               |
+| `Map()` للـ rate limiting            | `rate_limits` table                      |
+| `routes` query للشبكة                | `ping()` RPC                             |
+| استخدام `packages/db`                | كتابة migration جديد                     |
+| `console.log`                        | `logger.warn` / `logger.error`           |
+| `COALESCE` مع `user_metadata` في SQL | `app_metadata` فقط                       |
+| دمج `payload.new` في Realtime        | إعادة fetch كامل                         |
+| `reserve_seat()`                     | `activate_license()`                     |
+| camelCase في DataGrid columns        | snake_case (dataProvider يحوّل تلقائياً) |
 
 ---
 
 ## 15. 🔑 Supabase Projects
 
-| البيئة | ref | الملف |
-|--------|-----|-------|
+| البيئة     | ref                    | الملف                  |
+| ---------- | ---------------------- | ---------------------- |
 | Production | `zpcvvyxtmxzplmojobbv` | `.temp/linked-project` |
-| Local dev | `pfjsqgqrxnrlrfnchnqf` | `.env` |
+| Local dev  | `pfjsqgqrxnrlrfnchnqf` | `.env`                 |
 
 ---
 
@@ -329,10 +332,49 @@ deploy.yml: supabase db push + deploy 4 edge functions + set secrets
 - **Zustand Stores:** auth, trip, booking, i18n — كلها مع AsyncStorage persistence
 - **Institution Matching:** `profile.institution_id` يُحمّل من `profiles` table في `_layout.tsx`
 - **Ratings:** مُقيّد بـ `UNIQUE(trip_id, student_id)` في DB + فحص في RPC
-- **ZainCash:** stubs جاهزة — تحتاج merchant credentials للتفعيل الكامل
+- **ZainCash:** stubs جاهزة — تحتاج `ZAINCASH_SECRET`, `ZAINCASH_MSISDN`, `ZAINCASH_MERCHANT_ID`
+- **dataProvider:** يحوّل snake_case ↔ camelCase تلقائياً — لا تضع camelCase في columns
+- **Feature Flags:** `useFeatureFlags()` hook — يدعم live updates عبر Realtime
+- **Logger:** استخدم `logger.info/warn/error` بدلاً من `console.*`
 
 ---
 
-> **آخر تحديث:** Phase M5 (2026-05-11)
-> **Migration الحالي:** `2026051110_m5_performance.sql`
-> **الإصدار:** UniRide v2.0 — جاهز للنشر
+## 17. 📁 ملفات جديدة (M6)
+
+```
+apps/admin/src/
+├── providers/dataProvider.ts          -- snake_case ↔ camelCase wrapper
+├── app/institutions/page.tsx          -- إدارة المؤسسات
+└── app/analytics/page.tsx             -- Analytics dashboard
+
+apps/mobile/src/
+├── hooks/useFeatureFlags.ts           -- Feature flags مع Realtime
+└── lib/logger.ts                      -- Structured logger
+
+supabase/migrations/
+└── 2026051112_feature_flags_and_analytics.sql  -- Feature flags + analytics RPC
+```
+
+---
+
+## 18. 🧪 الاختبارات (M6)
+
+```bash
+pnpm test   # 123 اختبار — كلها تمر
+
+# ملفات الاختبار:
+packages/core/index.test.ts                        # 37 اختبار — state machine + schemas + i18n
+apps/admin/src/providers/authProvider.test.ts      # 12 اختبار — auth security
+apps/admin/src/providers/dataProvider.test.ts      # 5 اختبارات — snake↔camel
+apps/mobile/src/hooks/useTrips.test.ts             # 5 اختبارات — GPS queue
+apps/mobile/src/hooks/useFeatureFlags.test.ts      # 3 اختبارات — feature flags
+apps/mobile/src/lib/offlineCache.test.ts           # 7 اختبارات — offline cache
+apps/mobile/src/lib/logger.test.ts                 # 8 اختبارات — logger
+```
+
+---
+
+> **آخر تحديث:** Phase M6 (2026-05-12)
+> **Migration الحالي:** `2026051112_feature_flags_and_analytics.sql`
+> **الإصدار:** UniRide v2.1 — جاهز للنشر
+> **تغطية الاختبارات:** 123 اختبار ✅
