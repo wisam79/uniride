@@ -3,6 +3,18 @@
 import { Create } from "@refinedev/mui";
 import { Box, TextField, Checkbox, FormControlLabel } from "@mui/material";
 import { useForm } from "@refinedev/react-hook-form";
+import { BaseRecord, HttpError } from "@refinedev/core";
+
+interface FormValues {
+  driver_id: string;
+  title: string;
+  start_location: string;
+  end_location: string;
+  price: number;
+  capacity: number;
+  available_seats: number;
+  is_active: boolean;
+}
 
 export default function RouteCreate() {
   const {
@@ -12,7 +24,7 @@ export default function RouteCreate() {
     setValue,
     watch,
     formState: { errors },
-  } = useForm();
+  } = useForm<BaseRecord, HttpError, FormValues>();
 
   const selectedDriverId = watch("driver_id");
 
@@ -27,8 +39,8 @@ export default function RouteCreate() {
           {...register("driver_id", {
             required: "This field is required",
           })}
-          error={!!(errors as any)?.driver_id}
-          helperText={(errors as any)?.driver_id?.message || "Enter driver UUID from Drivers list"}
+          error={!!errors?.driver_id}
+          helperText={errors?.driver_id?.message || "Enter driver UUID from Drivers list"}
           margin="normal"
           fullWidth
           InputLabelProps={{ shrink: true }}
@@ -41,8 +53,8 @@ export default function RouteCreate() {
           {...register("title", {
             required: "This field is required",
           })}
-          error={!!(errors as any)?.title}
-          helperText={(errors as any)?.title?.message}
+          error={!!errors?.title}
+          helperText={errors?.title?.message}
           margin="normal"
           fullWidth
           InputLabelProps={{ shrink: true }}
@@ -54,8 +66,8 @@ export default function RouteCreate() {
           {...register("start_location", {
             required: "This field is required",
           })}
-          error={!!(errors as any)?.start_location}
-          helperText={(errors as any)?.start_location?.message}
+          error={!!errors?.start_location}
+          helperText={errors?.start_location?.message}
           margin="normal"
           fullWidth
           InputLabelProps={{ shrink: true }}
@@ -67,8 +79,8 @@ export default function RouteCreate() {
           {...register("end_location", {
             required: "This field is required",
           })}
-          error={!!(errors as any)?.end_location}
-          helperText={(errors as any)?.end_location?.message}
+          error={!!errors?.end_location}
+          helperText={errors?.end_location?.message}
           margin="normal"
           fullWidth
           InputLabelProps={{ shrink: true }}
@@ -82,8 +94,8 @@ export default function RouteCreate() {
             valueAsNumber: true,
             validate: (value) => value > 0 || "Price must be greater than 0",
           })}
-          error={!!(errors as any)?.price}
-          helperText={(errors as any)?.price?.message}
+          error={!!errors?.price}
+          helperText={errors?.price?.message}
           margin="normal"
           fullWidth
           InputLabelProps={{ shrink: true }}
@@ -97,8 +109,8 @@ export default function RouteCreate() {
             valueAsNumber: true,
             validate: (value) => value >= 1 || "Capacity must be at least 1",
           })}
-          error={!!(errors as any)?.capacity}
-          helperText={(errors as any)?.capacity?.message}
+          error={!!errors?.capacity}
+          helperText={errors?.capacity?.message}
           margin="normal"
           fullWidth
           InputLabelProps={{ shrink: true }}
@@ -115,8 +127,8 @@ export default function RouteCreate() {
               return value <= capacity || "Available seats cannot exceed capacity";
             },
           })}
-          error={!!(errors as any)?.available_seats}
-          helperText={(errors as any)?.available_seats?.message || "Must be less than or equal to capacity"}
+          error={!!errors?.available_seats}
+          helperText={errors?.available_seats?.message || "Must be less than or equal to capacity"}
           margin="normal"
           fullWidth
           InputLabelProps={{ shrink: true }}

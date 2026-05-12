@@ -45,48 +45,63 @@ export default function Layout() {
 
   // Auth listener
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        const role = session.user.app_metadata?.role || 'student'; // SECURITY: app_metadata only
-        setAuth({ id: session.user.id, email: session.user.email, user_metadata: session.user.user_metadata }, role);
-        // Fetch full profile from DB (includes institution_id for smart matching)
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('full_name, phone, institution_id')
-          .eq('id', session.user.id)
-          .single();
-        if (profileData) {
-          setProfile({
-            full_name: profileData.full_name || '',
-            phone: profileData.phone || '',
-            institution_id: profileData.institution_id,
-          });
+    supabase.auth.getSession()
+      .then(async ({ data: { session } }) => {
+        try {
+          if (session?.user) {
+            const role = session.user.app_metadata?.role || 'student'; // SECURITY: app_metadata only
+            setAuth({ id: session.user.id, email: session.user.email, user_metadata: session.user.user_metadata }, role);
+            // Fetch full profile from DB (includes institution_id for smart matching)
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('full_name, phone, institution_id')
+              .eq('id', session.user.id)
+              .single();
+            if (profileData) {
+              setProfile({
+                full_name: profileData.full_name || '',
+                phone: profileData.phone || '',
+                institution_id: profileData.institution_id,
+              });
+            }
+          }
+        } catch (error) {
+          console.warn('[Auth] getSession inner error:', error);
+        } finally {
+          setInitialized(true);
         }
-      }
-      setInitialized(true);
-    });
+      })
+      .catch((error) => {
+        console.warn('[Auth] getSession error:', error);
+        setInitialized(true);
+      });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        const role = session.user.app_metadata?.role || 'student'; // SECURITY: app_metadata only
-        setAuth({ id: session.user.id, email: session.user.email, user_metadata: session.user.user_metadata }, role);
-        // Fetch full profile from DB (includes institution_id for smart matching)
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('full_name, phone, institution_id')
-          .eq('id', session.user.id)
-          .single();
-        if (profileData) {
-          setProfile({
-            full_name: profileData.full_name || '',
-            phone: profileData.phone || '',
-            institution_id: profileData.institution_id,
-          });
+      try {
+        if (session?.user) {
+          const role = session.user.app_metadata?.role || 'student'; // SECURITY: app_metadata only
+          setAuth({ id: session.user.id, email: session.user.email, user_metadata: session.user.user_metadata }, role);
+          // Fetch full profile from DB (includes institution_id for smart matching)
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('full_name, phone, institution_id')
+            .eq('id', session.user.id)
+            .single();
+          if (profileData) {
+            setProfile({
+              full_name: profileData.full_name || '',
+              phone: profileData.phone || '',
+              institution_id: profileData.institution_id,
+            });
+          }
+        } else {
+          setAuth(null, null);
         }
-      } else {
-        setAuth(null, null);
+      } catch (error) {
+        console.warn('[Auth] onAuthStateChange inner error:', error);
+      } finally {
         setInitialized(true);
       }
     });

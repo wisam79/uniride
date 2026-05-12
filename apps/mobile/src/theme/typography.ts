@@ -4,9 +4,9 @@
  */
 
 export const FontFamily = {
-  regular: 'IBMPlexSansArabic-Regular',
-  medium: 'IBMPlexSansArabic-Medium',
-  bold: 'IBMPlexSansArabic-Bold',
+  regular: 'IBMPlexSansArabic_400Regular',
+  medium: 'IBMPlexSansArabic_500Medium',
+  bold: 'IBMPlexSansArabic_700Bold',
 } as const;
 
 export const FontSize = {

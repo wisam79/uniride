@@ -1,93 +1,120 @@
 import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
-import * as Device from 'expo-device';
-import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import { supabase } from '../lib/supabase';
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+/**
+ * useNotifications — Safe for both Expo Go and Development Builds.
+ *
+ * Since SDK 53, expo-notifications removed Android push notification
+ * support from Expo Go. We detect Expo Go at runtime and skip all
+ * notification logic to prevent crashes.
+ */
 
-async function registerForPushNotificationsAsync() {
-  let token;
-
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'default',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#C2703E',
-    });
-  }
-
-  if (Device.isDevice) {
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-    if (finalStatus !== 'granted') {
-      console.warn('Failed to get push token for push notification!');
-      return null;
-    }
-    
-    // Using default Expo project ID resolution
-    token = (await Notifications.getExpoPushTokenAsync()).data;
-  } else {
-    console.warn('Must use physical device for Push Notifications');
-  }
-
-  return token;
+// Detect if running in Expo Go
+function isExpoGo(): boolean {
+  return Constants.appOwnership === 'expo';
 }
 
 export function useNotifications() {
-  const notificationListener = useRef<Notifications.EventSubscription>();
-  const responseListener = useRef<Notifications.EventSubscription>();
+  const cleanupRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
+    // Skip notifications entirely in Expo Go — they are not supported since SDK 53
+    if (isExpoGo()) {
+      console.warn('[Notifications] Skipping — not supported in Expo Go (SDK 53+)');
+      return;
+    }
+
     let isMounted = true;
 
     async function initPushNotifications() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      try {
+        // Only import expo-notifications in development builds / standalone apps
+        const Notifications = require('expo-notifications') as typeof import('expo-notifications');
+        const Device = require('expo-device') as typeof import('expo-device');
 
-      const token = await registerForPushNotificationsAsync();
-      
-      if (token && isMounted) {
-        // Register token in Supabase
-        const { error } = await supabase.rpc('register_push_token', {
-          p_token: token,
+        // Set notification handler
+        Notifications.setNotificationHandler({
+          handleNotification: async () => ({
+            shouldShowBanner: true,
+            shouldShowList: true,
+            shouldPlaySound: true,
+            shouldSetBadge: true,
+          }),
         });
-        
-        if (error) {
-          console.warn('Error saving push token:', error.message);
+
+        if (Platform.OS === 'android') {
+          await Notifications.setNotificationChannelAsync('default', {
+            name: 'default',
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#C2703E',
+          });
         }
+
+        if (!Device.isDevice) {
+          console.warn('[Notifications] Must use physical device for Push Notifications');
+          return;
+        }
+
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user || !isMounted) return;
+
+        const { status: existingStatus } = await Notifications.getPermissionsAsync();
+        let finalStatus = existingStatus;
+        if (existingStatus !== 'granted') {
+          const { status } = await Notifications.requestPermissionsAsync();
+          finalStatus = status;
+        }
+        if (finalStatus !== 'granted') {
+          console.warn('[Notifications] Permission not granted');
+          return;
+        }
+
+        const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+        const token = (
+          await Notifications.getExpoPushTokenAsync(projectId ? { projectId } : undefined)
+        ).data;
+
+        if (token && isMounted) {
+          const { error } = await supabase.rpc('register_push_token', {
+            p_token: token,
+          });
+          if (error) {
+            console.warn('[Notifications] Error saving push token:', error.message);
+          }
+        }
+
+        // Setup listeners
+        if (isMounted) {
+          const notifSub = Notifications.addNotificationReceivedListener((notification) => {
+            console.warn('[Notifications] Received:', notification.request.content.title);
+          });
+
+          const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
+            console.warn(
+              '[Notifications] Interaction:',
+              response.notification.request.content.body
+            );
+          });
+
+          cleanupRef.current = () => {
+            notifSub.remove();
+            responseSub.remove();
+          };
+        }
+      } catch (error) {
+        console.warn('[Notifications] Init failed:', error);
       }
     }
 
     initPushNotifications();
 
-    // Listeners for foreground and interaction events
-    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
-      console.warn('Received notification:', notification.request.content.title);
-    });
-
-    responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
-      console.warn('User interacted with notification:', response.notification.request.content.body);
-    });
-
     return () => {
       isMounted = false;
-      if (notificationListener.current) {
-        Notifications.removeNotificationSubscription(notificationListener.current);
-      }
-      if (responseListener.current) {
-        Notifications.removeNotificationSubscription(responseListener.current);
+      if (cleanupRef.current) {
+        cleanupRef.current();
       }
     };
   }, []);

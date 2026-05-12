@@ -110,7 +110,7 @@ Deno.serve(async (req: Request) => {
         .eq('user_id', user.id)
         .eq('action', 'trip_status_change')
         .eq('resource_id', tripId)
-        .eq('details', JSON.stringify({ idempotencyKey }))
+        .eq('details->>idempotencyKey', idempotencyKey)
         .single();
 
       if (existingAudit) {
@@ -124,14 +124,12 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // FIX: pass user.id (auth UID) — create_trip() stores auth.uid() as trips.driver_id,
-    // so we must compare against the same value, not drivers.id
     const { error } = await supabaseClient.rpc('update_trip_status', {
       p_trip_id: tripId,
       p_new_status: newStatus,
       p_lat: validLat,
       p_lng: validLng,
-      p_driver_id: user.id,
+      p_driver_id: driverData.id,
     });
 
     if (error) {

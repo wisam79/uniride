@@ -4,6 +4,13 @@ import { Create, useAutocomplete } from "@refinedev/mui";
 import { Box, TextField, Autocomplete } from "@mui/material";
 import { useForm } from "@refinedev/react-hook-form";
 import { Controller } from "react-hook-form";
+import { BaseRecord, HttpError } from "@refinedev/core";
+
+interface FormValues {
+  route_id: string;
+  driver_id: string;
+  scheduled_at: string;
+}
 
 export default function TripCreate() {
   const {
@@ -12,7 +19,7 @@ export default function TripCreate() {
     register,
     control,
     formState: { errors },
-  } = useForm();
+  } = useForm<BaseRecord, HttpError, FormValues>();
 
   const { autocompleteProps: routeAutocompleteProps } = useAutocomplete({
     resource: "routes",
@@ -56,8 +63,8 @@ export default function TripCreate() {
                   label="Route"
                   margin="normal"
                   variant="outlined"
-                  error={!!(errors as any)?.route_id}
-                  helperText={(errors as any)?.route_id?.message}
+                  error={!!errors?.route_id}
+                  helperText={errors?.route_id?.message}
                   required
                 />
               )}
@@ -92,8 +99,8 @@ export default function TripCreate() {
                   label="Driver (Vehicle Plate)"
                   margin="normal"
                   variant="outlined"
-                  error={!!(errors as any)?.driver_id}
-                  helperText={(errors as any)?.driver_id?.message || "Select the driver for this trip"}
+                  error={!!errors?.driver_id}
+                  helperText={errors?.driver_id?.message || "Select the driver for this trip"}
                   required
                 />
               )}
@@ -105,8 +112,8 @@ export default function TripCreate() {
           {...register("scheduled_at", {
             required: "This field is required",
           })}
-          error={!!(errors as any)?.scheduled_at}
-          helperText={(errors as any)?.scheduled_at?.message}
+          error={!!errors?.scheduled_at}
+          helperText={errors?.scheduled_at?.message}
           margin="normal"
           fullWidth
           InputLabelProps={{ shrink: true }}
