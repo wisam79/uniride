@@ -2,12 +2,13 @@
 
 import { Authenticated, Refine } from '@refinedev/core';
 import { RefineKbarProvider } from '@refinedev/kbar';
-import { useNotificationProvider, RefineSnackbarProvider } from '@refinedev/mui';
+import { RefineSnackbarProvider, notificationProvider } from '@refinedev/mui';
 import routerProvider from '@refinedev/nextjs-router';
 import { authProvider } from './authProvider';
 import { supabaseClient } from './supabaseClient';
 import { dataProvider } from './dataProvider';
 import { Suspense } from 'react';
+import '../i18n';
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return (
@@ -18,7 +19,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             dataProvider={dataProvider}
             authProvider={authProvider}
             routerProvider={routerProvider}
-            notificationProvider={useNotificationProvider}
+            notificationProvider={notificationProvider}
             resources={[
               {
                 name: 'profiles',
@@ -66,6 +67,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 create: '/institutions/create',
                 edit: '/institutions/edit/:id',
                 meta: { label: 'Institutions' },
+              },
+              {
+                name: 'feature_flags',
+                list: '/feature-flags',
+                meta: { label: 'Feature Flags' },
               },
             ]}
             options={{

@@ -90,6 +90,7 @@ supabase.rpc('get_dashboard_stats');
 - `create_license_batch()` → إنشاء دفعة أكواد
 - `create_trip()` → إنشاء رحلة للسائق
 - `get_driver_avg_rating()` → متوسط تقييم السائق
+- `cancel_subscription()` → إلغاء اشتراك واسترداد المقعد (M7)
 
 ---
 
@@ -216,12 +217,16 @@ supabase/migrations/
 ├── 2026051002_trip_state_machine_and_rls.sql
 ├── 2026051003_indexes_audit_and_cancel.sql
 ├── 2026051004_phase0_fixes.sql
-├── 2026051005_critical_fixes.sql        -- RPCs, indexes, RLS
+├── 2026051005_critical_fixes.sql
 ├── 2026051106_fix_rate_limit_and_trip_engine.sql
 ├── 2026051107_infrastructure_and_push.sql
-├── 2026051108_license_system.sql        -- M3: Licenses
-├── 2026051109_ratings_and_ux.sql        -- M4: Ratings, Institutions
-└── 2026051110_m5_performance.sql        -- M5: Performance indexes
+├── 2026051108_license_system.sql
+├── 2026051109_ratings_and_ux.sql
+├── 2026051110_m5_performance.sql
+├── 2026051111_fix_security_and_driver_consistency.sql
+├── 2026051112_auto_create_profile_on_signup.sql
+├── 2026051113_feature_flags_and_analytics.sql  -- M6: Feature flags + analytics RPC
+└── 2026051114_cancel_subscription.sql          -- M7: cancel_subscription() RPC
 
 supabase/functions/
 ├── trip-engine/index.ts      -- تحديث حالة الرحلة (مع rate limiting)
@@ -339,20 +344,24 @@ deploy.yml: supabase db push + deploy 4 edge functions + set secrets
 
 ---
 
-## 17. 📁 ملفات جديدة (M6)
+## 17. 📁 ملفات جديدة (M7)
 
 ```
 apps/admin/src/
+├── app/trips/page.tsx                 -- إدارة الرحلات مع إلغاء يدوي + Realtime
+├── app/subscriptions/page.tsx         -- إدارة الاشتراكات مع أسماء بدلاً من UUIDs
+├── app/feature-flags/page.tsx         -- إدارة Feature Flags مع toggle مباشر
 ├── providers/dataProvider.ts          -- snake_case ↔ camelCase wrapper
 ├── app/institutions/page.tsx          -- إدارة المؤسسات
-└── app/analytics/page.tsx             -- Analytics dashboard
+└── app/analytics/page.tsx             -- Analytics dashboard مع Date Range Picker
 
 apps/mobile/src/
-├── hooks/useFeatureFlags.ts           -- Feature flags مع Realtime
+├── hooks/useFeatureFlags.ts           -- Feature flags مع Realtime + cache clear on logout
 └── lib/logger.ts                      -- Structured logger
 
 supabase/migrations/
-└── 2026051112_feature_flags_and_analytics.sql  -- Feature flags + analytics RPC
+├── 2026051113_feature_flags_and_analytics.sql  -- Feature flags + analytics RPC
+└── 2026051114_cancel_subscription.sql          -- cancel_subscription() RPC آمن
 ```
 
 ---
@@ -374,7 +383,7 @@ apps/mobile/src/lib/logger.test.ts                 # 8 اختبارات — logg
 
 ---
 
-> **آخر تحديث:** Phase M6 (2026-05-12)
-> **Migration الحالي:** `2026051112_feature_flags_and_analytics.sql`
-> **الإصدار:** UniRide v2.1 — جاهز للنشر
+> **آخر تحديث:** Phase M7 (2026-05-12)
+> **Migration الحالي:** `2026051114_cancel_subscription.sql`
+> **الإصدار:** UniRide v3.0 — جاهز للنشر
 > **تغطية الاختبارات:** 123 اختبار ✅

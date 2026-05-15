@@ -11,8 +11,10 @@ import {
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import React from 'react';
 import { Stack } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 
 export default function InstitutionList() {
+  const { t } = useTranslation();
   const { dataGridProps } = useDataGrid({
     resource: 'institutions',
   });
@@ -21,21 +23,21 @@ export default function InstitutionList() {
     () => [
       {
         field: 'id',
-        headerName: 'ID',
+        headerName: t('institutions.fields.id'),
         type: 'string',
         minWidth: 100,
         flex: 1,
       },
       {
         field: 'name',
-        headerName: 'Name',
+        headerName: t('institutions.fields.name'),
         type: 'string',
         minWidth: 220,
         flex: 1,
       },
       {
         field: 'city',
-        headerName: 'City',
+        headerName: t('institutions.fields.city'),
         type: 'string',
         minWidth: 150,
         flex: 1,
@@ -44,8 +46,8 @@ export default function InstitutionList() {
         },
       },
       {
-        field: 'created_at',
-        headerName: 'Created',
+        field: 'createdAt',
+        headerName: t('institutions.fields.createdAt'),
         minWidth: 160,
         flex: 1,
         renderCell: function render({ value }) {
@@ -54,7 +56,7 @@ export default function InstitutionList() {
       },
       {
         field: 'actions',
-        headerName: 'Actions',
+        headerName: t('institutions.fields.actions'),
         sortable: false,
         renderCell: function render({ row }) {
           return (

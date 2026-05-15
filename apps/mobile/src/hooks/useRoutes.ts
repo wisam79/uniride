@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { Route } from '@uniride/core';
+import { logger } from '../lib/logger';
 
 const PAGE_SIZE = 20;
 
@@ -116,7 +117,7 @@ export function useRouteById(routeId: string | null) {
       )
       .subscribe((status) => {
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.warn('[Realtime] route channel error, re-fetching...');
+          logger.warn('[Realtime] route channel error, re-fetching...', { status });
           fetchRoute();
         }
       });

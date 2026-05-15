@@ -1,21 +1,44 @@
 const { getDefaultConfig } = require('expo/metro-config');
 const path = require('path');
+const fs = require('fs');
 
 const projectRoot = __dirname;
 const workspaceRoot = path.resolve(projectRoot, '../..');
 
 const config = getDefaultConfig(projectRoot);
 
-// 1. Watch all files within the monorepo (append to defaults)
-config.watchFolders.push(workspaceRoot);
+config.watchFolders = [workspaceRoot];
 
-// 2. Let Metro know where to resolve packages and in what order
 config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, 'node_modules'),
   path.resolve(workspaceRoot, 'node_modules'),
 ];
 
-// 3. Align with Expo's recommendation
-config.resolver.disableHierarchicalLookup = false;
+// Use a Proxy to force resolution of critical packages to the workspace root
+// and dynamically resolve others. This is a robust way to handle pnpm monorepos.
+config.resolver.extraNodeModules = new Proxy(
+  {},
+  {
+    get: (target, name) => {
+      // Force these to the workspace root
+      if (['react', 'react-dom', 'react-native'].includes(name)) {
+        return path.resolve(workspaceRoot, 'node_modules', name);
+      }
+      // Handle workspace packages
+      if (name === '@uniride/core') {
+        return path.resolve(workspaceRoot, 'packages/core');
+      }
+      // Check local first, then root
+      const localPath = path.resolve(projectRoot, 'node_modules', name);
+      if (fs.existsSync(localPath)) {
+        return localPath;
+      }
+      return path.resolve(workspaceRoot, 'node_modules', name);
+    },
+  },
+);
+
+// Avoid hierarchical lookup to prevent Metro from getting confused by pnpm symlinks
+config.resolver.disableHierarchicalLookup = true;
 
 module.exports = config;

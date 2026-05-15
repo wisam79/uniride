@@ -11,7 +11,7 @@ interface LogEntry {
   level: LogLevel;
   message: string;
   timestamp: string;
-  context?: Record<string, unknown>;
+  context?: Record<string, unknown> | undefined;
 }
 
 const MAX_BUFFER = 100;
@@ -39,7 +39,7 @@ class Logger {
       level: 'debug',
       message,
       timestamp: new Date().toISOString(),
-      context,
+      ...(context !== undefined ? { context } : {}),
     };
     this.push(entry);
     console.warn(`[DEBUG] ${message}`, context ?? '');
@@ -50,7 +50,7 @@ class Logger {
       level: 'info',
       message,
       timestamp: new Date().toISOString(),
-      context,
+      ...(context !== undefined ? { context } : {}),
     };
     this.push(entry);
     if (this.isDev) console.warn(`[INFO] ${message}`, context ?? '');
@@ -61,7 +61,7 @@ class Logger {
       level: 'warn',
       message,
       timestamp: new Date().toISOString(),
-      context,
+      ...(context !== undefined ? { context } : {}),
     };
     this.push(entry);
     console.warn(`[WARN] ${message}`, context ?? '');
@@ -72,9 +72,18 @@ class Logger {
       level: 'error',
       message,
       timestamp: new Date().toISOString(),
-      context,
+      ...(context !== undefined ? { context } : {}),
     };
     this.push(entry);
+    // Report to Sentry (fire-and-forget)
+    try {
+      const { captureException } = require('./sentry') as {
+        captureException: (e: Error, ctx?: Record<string, unknown>) => void;
+      };
+      captureException(new Error(message), context);
+    } catch {
+      // Silent — never break the logger
+    }
     console.warn(`[ERROR] ${message}`, context ?? '');
     this.reportError(entry);
   }

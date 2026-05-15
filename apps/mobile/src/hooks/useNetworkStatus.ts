@@ -1,33 +1,32 @@
-import { useState, useEffect, useCallback } from 'react';
-import { AppState } from 'react-native';
+import { useState, useEffect } from 'react';
+import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { supabase } from '../lib/supabase';
+
+export function evaluateState(state: NetInfoState): boolean {
+  if (!state.isConnected) return false;
+  if (state.isInternetReachable === false) return false;
+  return true;
+}
 
 export function useNetworkStatus() {
   const [isOnline, setIsOnline] = useState(true);
 
   useEffect(() => {
-    let mounted = true;
-
-    async function checkConnection() {
-      try {
-        const { data, error } = await supabase.rpc('ping');
-        if (mounted) setIsOnline(!error && data === true);
-      } catch {
-        if (mounted) setIsOnline(false);
-      }
-    }
-
-    checkConnection();
-
-    const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') checkConnection();
+    NetInfo.fetch().then((state) => {
+      setIsOnline(evaluateState(state));
     });
 
-    const interval = setInterval(checkConnection, 30000);
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      setIsOnline(evaluateState(state));
+    });
+
+    const interval = setInterval(async () => {
+      const { error } = await supabase.rpc('ping');
+      setIsOnline(!error);
+    }, 30000);
 
     return () => {
-      mounted = false;
-      subscription.remove();
+      unsubscribe();
       clearInterval(interval);
     };
   }, []);

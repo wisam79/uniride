@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,37 +9,42 @@ import {
   StatusBar,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Colors, FontFamily, Spacing, BorderRadius, Typography } from '../src/theme';
+import { Colors, FontFamily, Spacing, BorderRadius } from '../src/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from '../src/hooks/useTranslation';
 
 const { width } = Dimensions.get('window');
 
-const SLIDES = [
-  {
-    id: '1',
-    title: 'نقل جامعي ذكي',
-    description: 'احجز مقعدك في خطوط النقل الجامعية بكل سهولة ويسر من هاتفك المحمول.',
-    icon: 'bus-outline',
-  },
-  {
-    id: '2',
-    title: 'تتبع رحلتك المباشر',
-    description: 'لا داعي للانتظار طويلاً، تابع حركة السائق مباشرة عبر الخريطة.',
-    icon: 'map-outline',
-  },
-  {
-    id: '3',
-    title: 'آمن وموثوق',
-    description: 'سائقون معتمدون ومركبات آمنة لضمان راحتك في رحلتك اليومية للجامعة.',
-    icon: 'shield-checkmark-outline',
-  },
-];
-
 export default function OnboardingScreen() {
   const router = useRouter();
+  const { t, isRTL } = useTranslation();
   const [currentIndex, setCurrentIndex] = useState(0);
   const scrollX = useRef(new Animated.Value(0)).current;
   const slidesRef = useRef<any>(null);
+
+  const SLIDES = useMemo(
+    () => [
+      {
+        id: '1',
+        title: t('uniride_tagline'),
+        description: t('onboarding_1_desc'),
+        icon: 'bus-outline',
+      },
+      {
+        id: '2',
+        title: t('onboarding_2_title'),
+        description: t('onboarding_2_desc'),
+        icon: 'map-outline',
+      },
+      {
+        id: '3',
+        title: t('onboarding_3_title'),
+        description: t('onboarding_3_desc'),
+        icon: 'shield-checkmark-outline',
+      },
+    ],
+    [t],
+  );
 
   const viewableItemsChanged = useRef(({ viewableItems }: any) => {
     if (viewableItems[0]) {
@@ -65,9 +70,9 @@ export default function OnboardingScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
 
-      <View style={styles.skipContainer}>
+      <View style={[styles.skipContainer, { alignItems: isRTL ? 'flex-end' : 'flex-start' }]}>
         <TouchableOpacity onPress={handleSkip}>
-          <Text style={styles.skipText}>تخطي</Text>
+          <Text style={styles.skipText}>{t('skip')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -93,10 +98,11 @@ export default function OnboardingScreen() {
         onViewableItemsChanged={viewableItemsChanged}
         viewabilityConfig={viewConfig}
         ref={slidesRef}
+        inverted={isRTL} // Handle RTL swipe
       />
 
       <View style={styles.footer}>
-        <View style={styles.paginator}>
+        <View style={[styles.paginator, isRTL && styles.rowReverse]}>
           {SLIDES.map((_, i) => {
             const inputRange = [(i - 1) * width, i * width, (i + 1) * width];
             const dotWidth = scrollX.interpolate({
@@ -118,15 +124,19 @@ export default function OnboardingScreen() {
           })}
         </View>
 
-        <TouchableOpacity style={styles.button} onPress={handleNext} activeOpacity={0.85}>
+        <TouchableOpacity
+          style={[styles.button, isRTL && styles.rowReverse]}
+          onPress={handleNext}
+          activeOpacity={0.85}
+        >
           <Text style={styles.buttonText}>
-            {currentIndex === SLIDES.length - 1 ? 'ابدأ الآن' : 'التالي'}
+            {currentIndex === SLIDES.length - 1 ? t('get_started') : t('next')}
           </Text>
           <Ionicons
-            name="arrow-back-outline" // Arrow points left because text is Arabic (RTL)
+            name={isRTL ? 'arrow-forward-outline' : 'arrow-back-outline'}
             size={20}
             color={Colors.white}
-            style={{ marginLeft: Spacing.sm }}
+            style={{ marginHorizontal: Spacing.sm }}
           />
         </TouchableOpacity>
       </View>
@@ -139,10 +149,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  rowReverse: {
+    flexDirection: 'row-reverse',
+  },
   skipContainer: {
     paddingTop: 60,
     paddingHorizontal: Spacing.xl,
-    alignItems: 'flex-start',
   },
   skipText: {
     fontFamily: FontFamily.medium,

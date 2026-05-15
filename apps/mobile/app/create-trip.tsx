@@ -14,9 +14,11 @@ import { supabase } from '../src/lib/supabase';
 import { Colors, FontFamily, Spacing, BorderRadius, Shadow } from '../src/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { Route } from '@uniride/core';
+import { useTranslation } from '../src/hooks/useTranslation';
 
 export default function CreateTripScreen() {
   const router = useRouter();
+  const { t, isRTL } = useTranslation();
   const [routes, setRoutes] = useState<Route[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -48,13 +50,13 @@ export default function CreateTripScreen() {
         if (error) throw error;
         setRoutes((data as Route[]) || []);
       } catch (err: any) {
-        Alert.alert('خطأ', err.message);
+        Alert.alert(t('error'), err.message);
       } finally {
         setIsLoading(false);
       }
     }
     fetchMyRoutes();
-  }, []);
+  }, [t]);
 
   const handleCreateTrip = async () => {
     if (!selectedRouteId) return;
@@ -64,18 +66,18 @@ export default function CreateTripScreen() {
       // Create trip scheduled for now
       const scheduledAt = new Date().toISOString();
 
-      const { data, error } = await supabase.rpc('create_trip', {
+      const { error } = await supabase.rpc('create_trip', {
         p_route_id: selectedRouteId,
         p_scheduled_at: scheduledAt,
       });
 
       if (error) throw error;
 
-      Alert.alert('نجاح', 'تم فتح الرحلة واستقبال الطلاب بنجاح', [
-        { text: 'حسناً', onPress: () => router.back() },
+      Alert.alert(t('success'), t('trip_opened_success'), [
+        { text: t('ok'), onPress: () => router.back() },
       ]);
     } catch (err: any) {
-      Alert.alert('خطأ في إنشاء الرحلة', err.message || 'حاول مرة أخرى');
+      Alert.alert(t('trip_creation_error'), err.message || t('try_again'));
     } finally {
       setIsSubmitting(false);
     }
@@ -94,15 +96,21 @@ export default function CreateTripScreen() {
       <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, isRTL && styles.rowReverse]}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-forward" size={24} color={Colors.text} />
+          <Ionicons
+            name={isRTL ? 'arrow-forward' : 'arrow-back'}
+            size={24}
+            color={Colors.text}
+          />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>رحلة جديدة</Text>
+        <Text style={styles.headerTitle}>{t('new_trip')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
-      <Text style={styles.pageSubtitle}>اختر الخط الذي ستقوم بالرحلة عليه الآن:</Text>
+      <Text style={[styles.pageSubtitle, { textAlign: isRTL ? 'right' : 'left' }]}>
+        {t('select_route_prompt')}
+      </Text>
 
       <FlatList
         data={routes}
@@ -116,25 +124,35 @@ export default function CreateTripScreen() {
               onPress={() => setSelectedRouteId(item.id)}
               activeOpacity={0.8}
             >
-              <View style={styles.routeHeader}>
+              <View style={[styles.routeHeader, isRTL && styles.rowReverse]}>
                 <Ionicons
                   name={isSelected ? 'radio-button-on' : 'radio-button-off'}
                   size={24}
                   color={isSelected ? Colors.primary : Colors.border}
                 />
-                <Text style={[styles.routeTitle, isSelected && styles.routeTitleSelected]}>
+                <Text
+                  style={[
+                    styles.routeTitle,
+                    isSelected && styles.routeTitleSelected,
+                    { textAlign: isRTL ? 'right' : 'left' },
+                  ]}
+                >
                   {item.title}
                 </Text>
               </View>
 
-              <View style={styles.routeDetails}>
-                <View style={styles.detailItem}>
+              <View style={[styles.routeDetails, isRTL && styles.rowReverse]}>
+                <View style={[styles.detailItem, isRTL && styles.rowReverse]}>
                   <Ionicons name="people-outline" size={16} color={Colors.textSecondary} />
-                  <Text style={styles.detailText}>{item.capacity} راكب</Text>
+                  <Text style={styles.detailText}>
+                    {item.capacity} {t('passengers')}
+                  </Text>
                 </View>
-                <View style={styles.detailItem}>
+                <View style={[styles.detailItem, isRTL && styles.rowReverse]}>
                   <Ionicons name="cash-outline" size={16} color={Colors.textSecondary} />
-                  <Text style={styles.detailText}>{item.price} د.ع</Text>
+                  <Text style={styles.detailText}>
+                    {item.price} {t('currency')}
+                  </Text>
                 </View>
               </View>
             </TouchableOpacity>
@@ -143,7 +161,7 @@ export default function CreateTripScreen() {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="bus-outline" size={48} color={Colors.border} />
-            <Text style={styles.emptyText}>لم يتم تخصيص خطوط لك بعد</Text>
+            <Text style={styles.emptyText}>{t('no_routes_assigned')}</Text>
           </View>
         }
       />
@@ -158,7 +176,7 @@ export default function CreateTripScreen() {
           {isSubmitting ? (
             <ActivityIndicator color={Colors.white} />
           ) : (
-            <Text style={styles.submitButtonText}>فتح الرحلة الآن</Text>
+            <Text style={styles.submitButtonText}>{t('open_trip_now')}</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -187,6 +205,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
+  rowReverse: {
+    flexDirection: 'row-reverse',
+  },
   backButton: {
     width: 40,
     height: 40,
@@ -204,7 +225,6 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.medium,
     fontSize: 15,
     color: Colors.textSecondary,
-    textAlign: 'right',
     padding: Spacing.lg,
   },
   listContent: {
@@ -234,16 +254,15 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
     fontSize: 16,
     color: Colors.text,
-    textAlign: 'right',
     flex: 1,
-    marginRight: Spacing.sm,
+    marginHorizontal: Spacing.sm,
   },
   routeTitleSelected: {
     color: Colors.primary,
   },
   routeDetails: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
     gap: Spacing.lg,
     borderTopWidth: 1,
     borderTopColor: Colors.border,

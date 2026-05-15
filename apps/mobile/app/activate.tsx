@@ -16,16 +16,18 @@ import { supabase } from '../src/lib/supabase';
 import { Colors, FontFamily, Spacing, BorderRadius, Shadow } from '../src/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../src/hooks/useStore';
+import { useTranslation } from '../src/hooks/useTranslation';
 
 export default function ActivateLicenseScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
+  const { t, isRTL } = useTranslation();
   const [code, setCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleActivate = async () => {
     if (!code.trim() || code.trim().length !== 8) {
-      Alert.alert('خطأ', 'يرجى إدخال كود ترخيص صحيح (8 أحرف)');
+      Alert.alert(t('error'), t('invalid_code_length'));
       return;
     }
 
@@ -37,11 +39,11 @@ export default function ActivateLicenseScreen() {
 
       if (error) throw error;
 
-      Alert.alert('نجاح', 'تم تفعيل الاشتراك بنجاح!', [
-        { text: 'حسناً', onPress: () => router.push('/') },
+      Alert.alert(t('success'), t('activation_success'), [
+        { text: t('ok'), onPress: () => router.push('/') },
       ]);
     } catch (err: any) {
-      Alert.alert('خطأ في التفعيل', err.message || 'الكود غير صالح أو مستخدم مسبقاً');
+      Alert.alert(t('activation_failed'), err.message || t('invalid_code_error'));
     } finally {
       setIsLoading(false);
     }
@@ -57,9 +59,13 @@ export default function ActivateLicenseScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-forward" size={24} color={Colors.text} />
+          <Ionicons
+            name={isRTL ? 'arrow-forward' : 'arrow-back'}
+            size={24}
+            color={Colors.text}
+          />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>تفعيل اشتراك</Text>
+        <Text style={styles.headerTitle}>{t('activate_subscription')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -68,15 +74,13 @@ export default function ActivateLicenseScreen() {
           <Ionicons name="card-outline" size={80} color={Colors.primary} />
         </View>
 
-        <Text style={styles.title}>أدخل كود الترخيص</Text>
-        <Text style={styles.subtitle}>
-          الرجاء إدخال الكود المكون من 8 أحرف وأرقام الذي حصلت عليه لتفعيل اشتراكك
-        </Text>
+        <Text style={styles.title}>{t('enter_license_code')}</Text>
+        <Text style={styles.subtitle}>{t('activate_license_description')}</Text>
 
         <View style={styles.inputContainer}>
           <TextInput
             style={styles.input}
-            placeholder="مثال: A1B2C3D4"
+            placeholder={t('license_placeholder')}
             placeholderTextColor={Colors.textMuted}
             value={code}
             onChangeText={setCode}
@@ -95,7 +99,7 @@ export default function ActivateLicenseScreen() {
           {isLoading ? (
             <ActivityIndicator color={Colors.white} />
           ) : (
-            <Text style={styles.buttonText}>تفعيل الآن</Text>
+            <Text style={styles.buttonText}>{t('activate')}</Text>
           )}
         </TouchableOpacity>
       </View>

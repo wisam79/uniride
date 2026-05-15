@@ -1,10 +1,11 @@
 'use client';
 
 import { Create } from '@refinedev/mui';
-import { Box, TextField, MenuItem, Autocomplete, Alert } from '@mui/material';
+import { Box, TextField, MenuItem, Alert } from '@mui/material';
 import { useForm } from '@refinedev/react-hook-form';
-import { useSelect, useApiUrl, useCustomMutation, BaseRecord, HttpError } from '@refinedev/core';
+import { useSelect, useNotification, BaseRecord, HttpError } from '@refinedev/core';
 import { supabaseClient } from '../../../providers/supabaseClient';
+import { useRouter } from 'next/navigation';
 
 interface LicenseBatchFormValues {
   batch_name: string;
@@ -17,12 +18,13 @@ interface LicenseBatchFormValues {
 export default function LicenseBatchCreate() {
   const {
     saveButtonProps,
-    refineCore: { formLoading, onFinish },
+    refineCore: { formLoading },
     register,
     handleSubmit,
-    control,
     formState: { errors },
   } = useForm<BaseRecord, HttpError, LicenseBatchFormValues>();
+  const router = useRouter();
+  const { open } = useNotification();
 
   const { options: routeOptions } = useSelect({
     resource: 'routes',
@@ -30,12 +32,9 @@ export default function LicenseBatchCreate() {
     optionValue: 'id',
   });
 
-  const { mutate } = useCustomMutation();
-
   const handleCustomSubmit = async (data: LicenseBatchFormValues) => {
-    // Call the RPC to create a batch securely and generate the codes
     try {
-      const { data: batchId, error } = await supabaseClient.rpc('create_license_batch', {
+      const { error } = await supabaseClient.rpc('create_license_batch', {
         p_route_id: data.route_id,
         p_batch_name: data.batch_name,
         p_quantity: Number(data.quantity),
@@ -44,18 +43,15 @@ export default function LicenseBatchCreate() {
       });
 
       if (error) {
-        alert(`Error: ${error.message}`);
+        open?.({ type: 'error', message: error.message, description: 'Failed to create batch' });
         return;
       }
 
-      // Redirect back manually since we used custom mutation
-      window.location.href = '/license_batches';
+      open?.({ type: 'success', message: 'Batch created successfully' });
+      router.push('/license_batches');
     } catch (e: unknown) {
-      if (e instanceof Error) {
-        alert(`Error: ${e.message}`);
-      } else {
-        alert('An unknown error occurred');
-      }
+      const message = e instanceof Error ? e.message : 'An unknown error occurred';
+      open?.({ type: 'error', message, description: 'Failed to create batch' });
     }
   };
 

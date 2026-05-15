@@ -4,8 +4,10 @@ import { List, useDataGrid, DateField } from '@refinedev/mui';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import React from 'react';
 import { useMany } from '@refinedev/core';
+import { useTranslation } from 'react-i18next';
 
 export default function LicenseBatchesList() {
+  const { t } = useTranslation();
   const { dataGridProps } = useDataGrid({
     resource: 'license_batches',
     sorters: {
@@ -20,7 +22,7 @@ export default function LicenseBatchesList() {
 
   const { data: routesData, isLoading: routesIsLoading } = useMany({
     resource: 'routes',
-    ids: dataGridProps?.rows?.map((item: any) => item?.route_id).filter(Boolean) ?? [],
+    ids: dataGridProps?.rows?.map((item: any) => item?.routeId).filter(Boolean) ?? [],
     queryOptions: {
       enabled: !!dataGridProps?.rows,
     },
@@ -29,21 +31,21 @@ export default function LicenseBatchesList() {
   const columns = React.useMemo<GridColDef[]>(
     () => [
       {
-        field: 'batch_name',
-        headerName: 'Batch Name',
+        field: 'batchName',
+        headerName: t('license_batches.fields.name'),
         type: 'string',
         minWidth: 150,
         flex: 1,
       },
       {
-        field: 'route_id',
-        headerName: 'Route',
+        field: 'routeId',
+        headerName: t('license_batches.fields.route'),
         type: 'string',
         minWidth: 200,
         flex: 1,
         renderCell: function render({ value }) {
           if (routesIsLoading) {
-            return 'Loading...';
+            return t('loading');
           }
           const route = routesData?.data?.find((item) => item.id === value);
           return route ? route.title : value;
@@ -51,28 +53,28 @@ export default function LicenseBatchesList() {
       },
       {
         field: 'quantity',
-        headerName: 'Quantity',
+        headerName: t('license_batches.fields.quantity'),
         type: 'number',
         minWidth: 100,
         flex: 1,
       },
       {
         field: 'price',
-        headerName: 'Price',
+        headerName: t('license_batches.fields.price'),
         type: 'number',
         minWidth: 100,
         flex: 1,
       },
       {
-        field: 'valid_days',
-        headerName: 'Valid Days',
+        field: 'validDays',
+        headerName: t('license_batches.fields.validDays'),
         type: 'number',
         minWidth: 100,
         flex: 1,
       },
       {
-        field: 'created_at',
-        headerName: 'Created At',
+        field: 'createdAt',
+        headerName: t('license_batches.fields.createdAt'),
         minWidth: 200,
         flex: 1,
         renderCell: function render({ value }) {
@@ -80,7 +82,7 @@ export default function LicenseBatchesList() {
         },
       },
     ],
-    [routesData?.data, routesIsLoading],
+    [routesData?.data, routesIsLoading, t],
   );
 
   return (

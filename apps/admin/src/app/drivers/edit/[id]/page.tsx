@@ -8,11 +8,11 @@ import { Controller } from 'react-hook-form';
 import { BaseRecord, HttpError } from '@refinedev/core';
 
 interface DriverEditFormValues {
-  license_number: string;
-  vehicle_model: string;
-  vehicle_plate: string;
+  licenseNumber: string;
+  vehicleModel: string;
+  vehiclePlate: string;
   capacity: number;
-  is_verified: boolean;
+  isVerified: boolean;
 }
 
 export default function DriverEdit() {
@@ -25,7 +25,7 @@ export default function DriverEdit() {
   } = useForm<BaseRecord, HttpError, DriverEditFormValues>();
 
   const driverData = queryResult?.data?.data;
-  const currentUserId = driverData?.user_id;
+  const currentUserId = driverData?.userId;
 
   return (
     <Edit isLoading={formLoading} saveButtonProps={saveButtonProps}>
@@ -40,43 +40,43 @@ export default function DriverEdit() {
           helperText="User profile cannot be changed after creation"
         />
         <TextField
-          {...register('license_number', {
+          {...register('licenseNumber', {
             required: 'This field is required',
           })}
-          error={!!errors?.license_number}
-          helperText={errors?.license_number?.message}
+          error={!!errors?.licenseNumber}
+          helperText={errors?.licenseNumber?.message}
           margin="normal"
           fullWidth
           InputLabelProps={{ shrink: true }}
           type="text"
           label="License Number"
-          name="license_number"
+          name="licenseNumber"
         />
         <TextField
-          {...register('vehicle_model', {
+          {...register('vehicleModel', {
             required: 'This field is required',
           })}
-          error={!!errors?.vehicle_model}
-          helperText={errors?.vehicle_model?.message}
+          error={!!errors?.vehicleModel}
+          helperText={errors?.vehicleModel?.message}
           margin="normal"
           fullWidth
           InputLabelProps={{ shrink: true }}
           type="text"
           label="Vehicle Model"
-          name="vehicle_model"
+          name="vehicleModel"
         />
         <TextField
-          {...register('vehicle_plate', {
+          {...register('vehiclePlate', {
             required: 'This field is required',
           })}
-          error={!!errors?.vehicle_plate}
-          helperText={errors?.vehicle_plate?.message}
+          error={!!errors?.vehiclePlate}
+          helperText={errors?.vehiclePlate?.message}
           margin="normal"
           fullWidth
           InputLabelProps={{ shrink: true }}
           type="text"
           label="Vehicle Plate"
-          name="vehicle_plate"
+          name="vehiclePlate"
         />
         <TextField
           {...register('capacity', {
@@ -95,7 +95,7 @@ export default function DriverEdit() {
         />
         <Controller
           control={control}
-          name="is_verified"
+          name="isVerified"
           render={({ field }) => (
             <FormControlLabel
               control={<Checkbox {...field} checked={field.value} />}

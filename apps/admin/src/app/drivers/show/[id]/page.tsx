@@ -11,9 +11,9 @@ export default function DriverShow() {
 
   const { data: profileData, isLoading: profileIsLoading } = useOne({
     resource: 'profiles',
-    id: record?.user_id || '',
+    id: record?.userId || '',
     queryOptions: {
-      enabled: !!record?.user_id,
+      enabled: !!record?.userId,
     },
   });
 
@@ -31,23 +31,23 @@ export default function DriverShow() {
         {profileIsLoading ? (
           <Typography variant="body2">Loading...</Typography>
         ) : (
-          <TextFieldComponent value={profileData?.data?.full_name || record?.user_id} />
+          <TextFieldComponent value={profileData?.data?.fullName || record?.userId} />
         )}
 
         <Typography variant="body1" fontWeight="bold">
           License Number
         </Typography>
-        <TextFieldComponent value={record?.license_number} />
+        <TextFieldComponent value={record?.licenseNumber} />
 
         <Typography variant="body1" fontWeight="bold">
           Vehicle Model
         </Typography>
-        <TextFieldComponent value={record?.vehicle_model} />
+        <TextFieldComponent value={record?.vehicleModel} />
 
         <Typography variant="body1" fontWeight="bold">
           Vehicle Plate
         </Typography>
-        <TextFieldComponent value={record?.vehicle_plate} />
+        <TextFieldComponent value={record?.vehiclePlate} />
 
         <Typography variant="body1" fontWeight="bold">
           Capacity
@@ -57,7 +57,7 @@ export default function DriverShow() {
         <Typography variant="body1" fontWeight="bold">
           Verified
         </Typography>
-        <BooleanField value={record?.is_verified} />
+        <BooleanField value={record?.isVerified} />
       </Stack>
     </Show>
   );

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { logger } from '../lib/logger';
+import { useAuthStore } from './useStore';
 
 interface FeatureFlag {
   name: string;
@@ -18,9 +19,23 @@ const DEFAULT_FLAGS: Record<string, boolean> = {
 
 let cachedFlags: Record<string, boolean> | null = null;
 
+/** Call this on logout to clear the module-level cache */
+export function clearFeatureFlagsCache() {
+  cachedFlags = null;
+}
+
 export function useFeatureFlags() {
+  const { user } = useAuthStore();
   const [flags, setFlags] = useState<Record<string, boolean>>(cachedFlags ?? DEFAULT_FLAGS);
   const [isLoading, setIsLoading] = useState(!cachedFlags);
+
+  // ✅ REQ-016: مسح الـ cache عند تسجيل الخروج
+  useEffect(() => {
+    if (!user) {
+      cachedFlags = null;
+      setFlags(DEFAULT_FLAGS);
+    }
+  }, [user]);
 
   const fetchFlags = useCallback(async () => {
     try {

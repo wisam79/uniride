@@ -19,37 +19,38 @@ describe('Logger', () => {
     logger.debug('test debug', { key: 'value' });
     const logs = logger.getLogs();
     expect(logs).toHaveLength(1);
-    expect(logs[0].level).toBe('debug');
-    expect(logs[0].message).toBe('test debug');
-    expect(logs[0].context).toEqual({ key: 'value' });
+    const entry = logs[0];
+    expect(entry?.level).toBe('debug');
+    expect(entry?.message).toBe('test debug');
+    expect(entry?.context).toEqual({ key: 'value' });
   });
 
   it('info logs are added to buffer', () => {
     logger.info('test info');
     const logs = logger.getLogs();
-    expect(logs[0].level).toBe('info');
-    expect(logs[0].message).toBe('test info');
+    expect(logs[0]?.level).toBe('info');
+    expect(logs[0]?.message).toBe('test info');
   });
 
   it('warn logs are added to buffer', () => {
     logger.warn('test warn', { reason: 'network' });
     const logs = logger.getLogs();
-    expect(logs[0].level).toBe('warn');
-    expect(logs[0].context?.reason).toBe('network');
+    expect(logs[0]?.level).toBe('warn');
+    expect(logs[0]?.context?.reason).toBe('network');
   });
 
   it('error logs are added to buffer', () => {
     logger.error('test error', { code: 500 });
     const logs = logger.getLogs();
-    expect(logs[0].level).toBe('error');
-    expect(logs[0].context?.code).toBe(500);
+    expect(logs[0]?.level).toBe('error');
+    expect(logs[0]?.context?.code).toBe(500);
   });
 
   it('all log entries have a timestamp', () => {
     logger.info('timestamped');
     const logs = logger.getLogs();
-    expect(logs[0].timestamp).toBeTruthy();
-    expect(new Date(logs[0].timestamp).getTime()).not.toBeNaN();
+    expect(logs[0]?.timestamp).toBeTruthy();
+    expect(new Date(logs[0]?.timestamp ?? '').getTime()).not.toBeNaN();
   });
 
   it('buffer does not exceed MAX_BUFFER (100)', () => {

@@ -3,7 +3,8 @@
 import { useDataGrid, List, EditButton, ShowButton } from '@refinedev/mui';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import React from 'react';
-import { Stack, Chip } from '@mui/material';
+import { Chip, Stack } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 
 const ROLE_COLORS: Record<
   string,
@@ -15,6 +16,7 @@ const ROLE_COLORS: Record<
 };
 
 export default function ProfileList() {
+  const { t } = useTranslation();
   const { dataGridProps } = useDataGrid({
     resource: 'profiles',
   });
@@ -23,38 +25,38 @@ export default function ProfileList() {
     () => [
       {
         field: 'id',
-        headerName: 'ID',
+        headerName: t('profiles.fields.id'),
         type: 'string',
         minWidth: 100,
         flex: 1,
       },
       {
-        field: 'full_name',
-        headerName: 'Full Name',
+        field: 'fullName',
+        headerName: t('profiles.fields.fullName'),
         type: 'string',
         minWidth: 180,
         flex: 1,
       },
       {
         field: 'phone',
-        headerName: 'Phone',
+        headerName: t('profiles.fields.phone'),
         type: 'string',
         minWidth: 150,
         flex: 1,
       },
       {
         field: 'role',
-        headerName: 'Role',
+        headerName: t('profiles.fields.role'),
         type: 'string',
         minWidth: 120,
         flex: 0.5,
         renderCell: function render({ value }) {
-          return <Chip label={value} color={ROLE_COLORS[value] || 'default'} size="small" />;
+          return <Chip label={t(value)} color={ROLE_COLORS[value] || 'default'} size="small" />;
         },
       },
       {
-        field: 'created_at',
-        headerName: 'Joined',
+        field: 'createdAt',
+        headerName: t('profiles.fields.joined'),
         minWidth: 180,
         flex: 1,
         renderCell: function render({ value }) {
@@ -63,7 +65,7 @@ export default function ProfileList() {
       },
       {
         field: 'actions',
-        headerName: 'Actions',
+        headerName: t('profiles.fields.actions'),
         sortable: false,
         renderCell: function render({ row }) {
           return (

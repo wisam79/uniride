@@ -5,15 +5,17 @@ import { List, useDataGrid, DateField, EditButton, ShowButton } from '@refinedev
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import React from 'react';
 import { Stack } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 
 export default function RouteList() {
+  const { t } = useTranslation();
   const { dataGridProps } = useDataGrid({
     resource: 'routes',
   });
 
   const { data: driverData, isLoading: driverIsLoading } = useMany({
     resource: 'drivers',
-    ids: dataGridProps?.rows?.map((item: any) => item?.driver_id).filter(Boolean) ?? [],
+    ids: dataGridProps?.rows?.map((item: any) => item?.driverId).filter(Boolean) ?? [],
     queryOptions: {
       enabled: !!dataGridProps?.rows,
     },
@@ -23,78 +25,78 @@ export default function RouteList() {
     () => [
       {
         field: 'id',
-        headerName: 'ID',
+        headerName: t('routes.fields.id'),
         type: 'string',
         minWidth: 100,
         flex: 1,
       },
       {
         field: 'title',
-        headerName: 'Title',
+        headerName: t('routes.fields.title'),
         type: 'string',
         minWidth: 150,
         flex: 1,
       },
       {
-        field: 'driver_id',
-        headerName: 'Driver',
+        field: 'driverId',
+        headerName: t('routes.fields.driver'),
         type: 'string',
         minWidth: 200,
         flex: 1,
         renderCell: function render({ value }) {
           if (driverIsLoading) {
-            return <>Loading...</>;
+            return <>{t('loading')}</>;
           }
 
           const driver = driverData?.data?.find((item) => item.id === value);
-          return driver ? driver.licenseNumber : value;
+          return driver ? (driver.fullName ?? driver.licenseNumber ?? value) : value;
         },
       },
       {
-        field: 'start_location',
-        headerName: 'Start Location',
+        field: 'startLocation',
+        headerName: t('routes.fields.startLocation'),
         type: 'string',
         minWidth: 150,
         flex: 1,
       },
       {
-        field: 'end_location',
-        headerName: 'End Location',
+        field: 'endLocation',
+        headerName: t('routes.fields.endLocation'),
         type: 'string',
         minWidth: 150,
         flex: 1,
       },
       {
         field: 'price',
-        headerName: 'Price',
+        headerName: t('routes.fields.price'),
         type: 'number',
         minWidth: 100,
         flex: 1,
       },
       {
         field: 'capacity',
-        headerName: 'Capacity',
+        headerName: t('routes.fields.capacity'),
         type: 'number',
         minWidth: 100,
         flex: 1,
       },
       {
-        field: 'available_seats',
-        headerName: 'Available Seats',
+        field: 'availableSeats',
+        headerName: t('routes.fields.availableSeats'),
         type: 'number',
         minWidth: 100,
         flex: 1,
       },
       {
-        field: 'is_active',
-        headerName: 'Active',
+        field: 'isActive',
+        headerName: t('routes.fields.active'),
         type: 'boolean',
         minWidth: 100,
         flex: 1,
       },
       {
         field: 'actions',
-        headerName: 'Actions',
+        headerName: t('routes.fields.actions'),
         sortable: false,
         renderCell: function render({ row }) {
           return (

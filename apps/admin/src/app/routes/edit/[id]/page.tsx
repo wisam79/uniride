@@ -8,12 +8,12 @@ import { BaseRecord, HttpError } from '@refinedev/core';
 
 interface FormValues {
   title: string;
-  start_location: string;
-  end_location: string;
+  startLocation: string;
+  endLocation: string;
   price: number;
   capacity: number;
-  available_seats: number;
-  is_active: boolean;
+  availableSeats: number;
+  isActive: boolean;
 }
 
 export default function RouteEdit() {
@@ -22,13 +22,12 @@ export default function RouteEdit() {
     refineCore: { queryResult, formLoading },
     register,
     control,
-    setValue,
     watch,
     formState: { errors },
   } = useForm<BaseRecord, HttpError, FormValues>();
 
   const routesData = queryResult?.data?.data;
-  const currentDriverId = routesData?.driver_id;
+  const currentDriverId = routesData?.driverId;
 
   return (
     <Edit isLoading={formLoading} saveButtonProps={saveButtonProps}>
@@ -56,30 +55,30 @@ export default function RouteEdit() {
           name="title"
         />
         <TextField
-          {...register('start_location', {
+          {...register('startLocation', {
             required: 'This field is required',
           })}
-          error={!!errors?.start_location}
-          helperText={errors?.start_location?.message}
+          error={!!errors?.startLocation}
+          helperText={errors?.startLocation?.message}
           margin="normal"
           fullWidth
           InputLabelProps={{ shrink: true }}
           type="text"
           label="Start Location"
-          name="start_location"
+          name="startLocation"
         />
         <TextField
-          {...register('end_location', {
+          {...register('endLocation', {
             required: 'This field is required',
           })}
-          error={!!errors?.end_location}
-          helperText={errors?.end_location?.message}
+          error={!!errors?.endLocation}
+          helperText={errors?.endLocation?.message}
           margin="normal"
           fullWidth
           InputLabelProps={{ shrink: true }}
           type="text"
           label="End Location"
-          name="end_location"
+          name="endLocation"
         />
         <TextField
           {...register('price', {
@@ -112,7 +111,7 @@ export default function RouteEdit() {
           name="capacity"
         />
         <TextField
-          {...register('available_seats', {
+          {...register('availableSeats', {
             required: 'This field is required',
             valueAsNumber: true,
             validate: (value) => {
@@ -120,18 +119,18 @@ export default function RouteEdit() {
               return value <= capacity || 'Available seats cannot exceed capacity';
             },
           })}
-          error={!!errors?.available_seats}
-          helperText={errors?.available_seats?.message || 'Must be less than or equal to capacity'}
+          error={!!errors?.availableSeats}
+          helperText={errors?.availableSeats?.message || 'Must be less than or equal to capacity'}
           margin="normal"
           fullWidth
           InputLabelProps={{ shrink: true }}
           type="number"
           label="Available Seats"
-          name="available_seats"
+          name="availableSeats"
         />
         <Controller
           control={control}
-          name="is_active"
+          name="isActive"
           render={({ field }) => (
             <FormControlLabel
               control={<Checkbox {...field} checked={field.value} />}

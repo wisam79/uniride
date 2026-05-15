@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   StyleSheet,
   Text,
@@ -15,16 +15,11 @@ import * as Location from 'expo-location';
 import { supabase } from '../src/lib/supabase';
 import { useAuthStore, useTripStore } from '../src/hooks/useStore';
 import { useDriverTrips, useLocationTracker } from '../src/hooks/useTrips';
+import { useDriverBalance } from '../src/hooks/useDriverBalance';
 import { useTranslation } from '../src/hooks/useTranslation';
 import { canTransition, TripStatus, Route } from '@uniride/core';
 import { Colors, FontFamily, Spacing, BorderRadius, Shadow } from '../src/theme';
 import { Ionicons } from '@expo/vector-icons';
-
-function getErrorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  if (typeof err === 'string') return err;
-  return 'حدث خطأ غير معروف';
-}
 
 interface DriverTrip {
   id: string;
@@ -39,40 +34,6 @@ interface DriverTrip {
   routes?: Route | null;
 }
 
-const STATUS_DISPLAY: Record<string, { label: string; color: string; bg: string; icon: string }> = {
-  scheduled: {
-    label: 'مجدولة',
-    color: Colors.warning,
-    bg: Colors.warningSurface,
-    icon: 'calendar-outline',
-  },
-  driver_waiting: {
-    label: 'في الانتظار',
-    color: Colors.primary,
-    bg: Colors.primarySurface,
-    icon: 'time-outline',
-  },
-  in_transit: {
-    label: 'في الطريق',
-    color: Colors.success,
-    bg: Colors.successSurface,
-    icon: 'navigate-outline',
-  },
-  completed: {
-    label: 'مكتملة',
-    color: Colors.textMuted,
-    bg: Colors.surfaceMuted,
-    icon: 'checkmark-circle-outline',
-  },
-  absent: {
-    label: 'غائب',
-    color: Colors.textMuted,
-    bg: Colors.surfaceMuted,
-    icon: 'person-remove-outline',
-  },
-  cancelled: { label: 'ملغاة', color: Colors.error, bg: Colors.errorSurface, icon: 'ban-outline' },
-};
-
 async function getCurrentLocation(): Promise<{ lat: number; lng: number } | null> {
   try {
     const { status } = await Location.requestForegroundPermissionsAsync();
@@ -85,22 +46,124 @@ async function getCurrentLocation(): Promise<{ lat: number; lng: number } | null
 }
 
 export default function DriverDashboard() {
-  const { trips, isLoading, refetch } = useDriverTrips();
-  const { profile, logout } = useAuthStore();
+  const { trips, isLoading: tripsLoading, refetch: refetchTrips } = useDriverTrips();
+  const { balance, isLoading: balanceLoading, refetch: refetchBalance } = useDriverBalance();
+  const { profile, logout, user } = useAuthStore();
   const { startTracking, stopTracking } = useLocationTracker();
-  const { t } = useTranslation();
+  const { t, isRTL, language } = useTranslation();
   const router = useRouter();
   const [updatingTripId, setUpdatingTripId] = useState<string | null>(null);
+  const [requestingPayout, setRequestingPayout] = useState(false);
   const { activeTripId, setActiveTrip, updateStatus, clearTrip } = useTripStore();
+
+  const STATUS_DISPLAY: Record<
+    TripStatus,
+    { label: string; color: string; bg: string; icon: string }
+  > = useMemo(
+    () => ({
+      scheduled: {
+        label: t('scheduled'),
+        color: Colors.warning,
+        bg: Colors.warningSurface,
+        icon: 'calendar-outline',
+      },
+      driver_waiting: {
+        label: t('driver_waiting'),
+        color: Colors.primary,
+        bg: Colors.primarySurface,
+        icon: 'time-outline',
+      },
+      in_transit: {
+        label: t('in_transit'),
+        color: Colors.success,
+        bg: Colors.successSurface,
+        icon: 'navigate-outline',
+      },
+      completed: {
+        label: t('completed'),
+        color: Colors.textMuted,
+        bg: Colors.surfaceMuted,
+        icon: 'checkmark-circle-outline',
+      },
+      absent: {
+        label: t('absent'),
+        color: Colors.textMuted,
+        bg: Colors.surfaceMuted,
+        icon: 'person-remove-outline',
+      },
+      cancelled: {
+        label: t('cancelled'),
+        color: Colors.error,
+        bg: Colors.errorSurface,
+        icon: 'ban-outline',
+      },
+    }),
+    [t],
+  );
+
+  const getErrorMessage = useCallback(
+    (err: unknown): string => {
+      if (err instanceof Error) return err.message;
+      if (typeof err === 'string') return err;
+      return t('error_generic');
+    },
+    [t],
+  );
+
+  const handleRefresh = useCallback(() => {
+    refetchTrips();
+    refetchBalance();
+  }, [refetchTrips, refetchBalance]);
+
+  const handleRequestPayout = async () => {
+    if (!balance || balance.available_to_withdraw <= 0) return;
+
+    Alert.alert(
+      t('request_payout_title'),
+      `${t('request_payout_confirm')} (${balance.available_to_withdraw.toLocaleString()} ${t('currency')})`,
+      [
+        { text: t('go_back_short'), style: 'cancel' },
+        {
+          text: t('confirm_request'),
+          onPress: async () => {
+            setRequestingPayout(true);
+            try {
+              const { data: driverData, error: driverError } = await supabase
+                .from('drivers')
+                .select('id')
+                .eq('user_id', user?.id)
+                .single();
+
+              if (driverError || !driverData) throw new Error('Driver not found');
+
+              const { error } = await supabase.from('driver_payouts').insert({
+                driver_id: driverData.id,
+                amount: balance.available_to_withdraw,
+                status: 'pending',
+              });
+
+              if (error) throw error;
+              Alert.alert(t('success'), t('payout_submitted_success'));
+              refetchBalance();
+            } catch (err: unknown) {
+              Alert.alert(t('error'), getErrorMessage(err));
+            } finally {
+              setRequestingPayout(false);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   const getNextAction = (status: TripStatus): { label: string; newStatus: TripStatus } | null => {
     switch (status) {
       case 'scheduled':
-        return { label: 'بدء استقبال الطلاب', newStatus: 'driver_waiting' as TripStatus };
+        return { label: t('start_receiving_students'), newStatus: 'driver_waiting' as TripStatus };
       case 'driver_waiting':
-        return { label: 'انطلاق الرحلة', newStatus: 'in_transit' as TripStatus };
+        return { label: t('start_trip_action'), newStatus: 'in_transit' as TripStatus };
       case 'in_transit':
-        return { label: 'إنهاء الرحلة', newStatus: 'completed' as TripStatus };
+        return { label: t('end_trip'), newStatus: 'completed' as TripStatus };
       default:
         return null;
     }
@@ -109,7 +172,7 @@ export default function DriverDashboard() {
   const handleStatusUpdate = useCallback(
     async (tripId: string, currentStatus: TripStatus, newStatus: TripStatus) => {
       if (!canTransition(currentStatus, newStatus)) {
-        Alert.alert('خطأ', 'انتقال حالة غير صالح');
+        Alert.alert(t('error'), t('invalid_transition'));
         return;
       }
 
@@ -147,28 +210,38 @@ export default function DriverDashboard() {
           updateStatus(newStatus);
         }
 
-        refetch();
+        refetchTrips();
       } catch (err: unknown) {
-        Alert.alert('خطأ', getErrorMessage(err));
+        Alert.alert(t('error'), getErrorMessage(err));
       } finally {
         setUpdatingTripId(null);
       }
     },
-    [activeTripId, startTracking, stopTracking, setActiveTrip, clearTrip, updateStatus, refetch],
+    [
+      activeTripId,
+      startTracking,
+      stopTracking,
+      setActiveTrip,
+      clearTrip,
+      updateStatus,
+      refetchTrips,
+      t,
+      getErrorMessage,
+    ],
   );
 
   const handleCancelTrip = useCallback(
     async (tripId: string, currentStatus: TripStatus) => {
-      Alert.alert('إلغاء الرحلة', 'هل أنت متأكد من إلغاء هذه الرحلة؟', [
-        { text: 'تراجع', style: 'cancel' },
+      Alert.alert(t('cancel_trip'), t('cancel_trip_confirm'), [
+        { text: t('go_back_short'), style: 'cancel' },
         {
-          text: 'نعم، قم بالإلغاء',
+          text: t('yes_cancel'),
           style: 'destructive',
           onPress: () => handleStatusUpdate(tripId, currentStatus, 'cancelled' as TripStatus),
         },
       ]);
     },
-    [handleStatusUpdate],
+    [handleStatusUpdate, t],
   );
 
   const handleLogout = async () => {
@@ -178,11 +251,12 @@ export default function DriverDashboard() {
   };
 
   const renderItem = ({ item }: { item: DriverTrip }) => {
-    const statusDisplay = STATUS_DISPLAY[item.status] || STATUS_DISPLAY.scheduled;
+    const statusDisplay = STATUS_DISPLAY[item.status] ?? STATUS_DISPLAY['scheduled']!;
     const nextAction = getNextAction(item.status as TripStatus);
     const isUpdating = updatingTripId === item.id;
-    const tripDate = new Date(item.scheduled_at).toLocaleDateString('ar-IQ');
-    const tripTime = new Date(item.scheduled_at).toLocaleTimeString('ar-IQ', {
+    const locale = language === 'ar' ? 'ar-IQ' : 'en-US';
+    const tripDate = new Date(item.scheduled_at).toLocaleDateString(locale);
+    const tripTime = new Date(item.scheduled_at).toLocaleTimeString(locale, {
       hour: '2-digit',
       minute: '2-digit',
     });
@@ -190,8 +264,8 @@ export default function DriverDashboard() {
     return (
       <View style={styles.tripCard}>
         {/* Header */}
-        <View style={styles.tripHeader}>
-          <View style={[styles.statusBadge, { backgroundColor: statusDisplay.bg }]}>
+        <View style={[styles.tripHeader, isRTL && styles.rowReverse]}>
+          <View style={[styles.statusBadge, { backgroundColor: statusDisplay.bg }, isRTL && styles.rowReverse]}>
             <Ionicons name={statusDisplay.icon as any} size={14} color={statusDisplay.color} />
             <Text style={[styles.statusText, { color: statusDisplay.color }]}>
               {statusDisplay.label}
@@ -204,9 +278,9 @@ export default function DriverDashboard() {
 
         {/* Route Info */}
         {item.routes && (
-          <View style={styles.routeContainer}>
+          <View style={[styles.routeContainer, isRTL && styles.rowReverse]}>
             <Ionicons name="bus-outline" size={24} color={Colors.secondaryLight} />
-            <Text style={styles.routeInfo} numberOfLines={2}>
+            <Text style={[styles.routeInfo, { textAlign: isRTL ? 'right' : 'left' }]} numberOfLines={2}>
               {item.routes.title}
             </Text>
           </View>
@@ -214,7 +288,7 @@ export default function DriverDashboard() {
 
         {/* Actions */}
         {nextAction && (
-          <View style={styles.actionRow}>
+          <View style={[styles.actionRow, isRTL && styles.rowReverse]}>
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: statusDisplay.color }]}
               onPress={() => handleStatusUpdate(item.id, item.status, nextAction.newStatus)}
@@ -249,11 +323,11 @@ export default function DriverDashboard() {
       <StatusBar barStyle="light-content" backgroundColor={Colors.secondary} />
 
       {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle}>لوحة السائق</Text>
+      <View style={[styles.header, isRTL && styles.rowReverse]}>
+        <View style={[styles.headerTitleContainer, { alignItems: isRTL ? 'flex-end' : 'flex-start' }]}>
+          <Text style={styles.headerTitle}>{t('driver_dashboard')}</Text>
           {profile?.full_name && (
-            <Text style={styles.headerSubtitle}>مرحباً، {profile.full_name}</Text>
+            <Text style={styles.headerSubtitle}>{t('hello')}, {profile.full_name}</Text>
           )}
         </View>
         <TouchableOpacity
@@ -275,16 +349,44 @@ export default function DriverDashboard() {
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl
-            refreshing={isLoading}
-            onRefresh={refetch}
+            refreshing={tripsLoading || balanceLoading}
+            onRefresh={handleRefresh}
             colors={[Colors.primary]}
             tintColor={Colors.primary}
           />
         }
+        ListHeaderComponent={
+          balance ? (
+            <View style={[styles.balanceCard, isRTL && styles.rowReverse]}>
+              <View style={[styles.balanceInfo, { alignItems: isRTL ? 'flex-end' : 'flex-start' }]}>
+                <Text style={styles.balanceLabel}>{t('available_balance')}</Text>
+                <Text style={styles.balanceAmount}>
+                  {balance.available_to_withdraw.toLocaleString()} {t('currency')}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[
+                  styles.payoutButton,
+                  (balance.available_to_withdraw <= 0 || requestingPayout) &&
+                    styles.payoutButtonDisabled,
+                ]}
+                onPress={handleRequestPayout}
+                disabled={balance.available_to_withdraw <= 0 || requestingPayout}
+                activeOpacity={0.85}
+              >
+                {requestingPayout ? (
+                  <ActivityIndicator size="small" color={Colors.white} />
+                ) : (
+                  <Text style={styles.payoutButtonText}>{t('withdraw_request')}</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          ) : null
+        }
         ListEmptyComponent={
           <View style={styles.center}>
             <Ionicons name="car-outline" size={64} color={Colors.border} />
-            <Text style={styles.emptyText}>لا توجد رحلات مجدولة حالياً</Text>
+            <Text style={styles.emptyText}>{t('no_scheduled_trips')}</Text>
           </View>
         }
         showsVerticalScrollIndicator={false}
@@ -292,7 +394,7 @@ export default function DriverDashboard() {
 
       {/* Floating Action Button */}
       <TouchableOpacity
-        style={styles.fab}
+        style={[styles.fab, isRTL ? { left: Spacing.xl } : { right: Spacing.xl }]}
         activeOpacity={0.9}
         onPress={() => router.push('/create-trip')}
       >
@@ -304,6 +406,7 @@ export default function DriverDashboard() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  rowReverse: { flexDirection: 'row-reverse' },
   // Header
   header: {
     flexDirection: 'row',
@@ -353,6 +456,47 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.textMuted,
   },
+  // Balance Card
+  balanceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.primarySurface,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.xl,
+    marginBottom: Spacing.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 122, 255, 0.1)',
+  },
+  balanceInfo: {
+    flex: 1,
+  },
+  balanceLabel: {
+    fontFamily: FontFamily.medium,
+    fontSize: 13,
+    color: Colors.primary,
+    marginBottom: 4,
+  },
+  balanceAmount: {
+    fontFamily: FontFamily.bold,
+    fontSize: 22,
+    color: Colors.primary,
+  },
+  payoutButton: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+    ...Shadow.sm,
+  },
+  payoutButtonDisabled: {
+    opacity: 0.5,
+  },
+  payoutButtonText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 14,
+    color: Colors.white,
+  },
   // Card
   tripCard: {
     backgroundColor: Colors.surface,
@@ -398,7 +542,6 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
     fontSize: 16,
     color: Colors.text,
-    textAlign: 'right',
   },
   // Actions
   actionRow: {
@@ -430,7 +573,6 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     bottom: Spacing.xxxl,
-    left: Spacing.xl, // FAB on the left for RTL
     width: 64,
     height: 64,
     borderRadius: 32,

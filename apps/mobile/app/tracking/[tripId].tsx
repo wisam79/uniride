@@ -96,7 +96,7 @@ export default function TrackingScreen() {
     );
   }
 
-  const status = STATUS_CONFIG[trip.status] || STATUS_CONFIG.scheduled;
+  const status = STATUS_CONFIG[trip.status] ?? STATUS_CONFIG['scheduled']!;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>

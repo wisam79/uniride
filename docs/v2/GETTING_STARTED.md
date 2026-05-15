@@ -1,84 +1,231 @@
-# 🚀 Getting Started with UniRide v2
+# 🚀 دليل البدء — UniRide v3
 
-This guide will walk you through setting up the UniRide v2 environment on your local machine.
+---
 
-## Prerequisites
+## المتطلبات الأساسية
 
-Before you begin, ensure you have the following installed:
+| الأداة       | الإصدار المطلوب | التثبيت                            |
+| ------------ | --------------- | ---------------------------------- |
+| Node.js      | ≥ 22.0.0        | [nodejs.org](https://nodejs.org)   |
+| pnpm         | ≥ 10.0.0        | `npm install -g pnpm`              |
+| Supabase CLI | latest          | `winget install Supabase.CLI`      |
+| Git          | أي إصدار        | [git-scm.com](https://git-scm.com) |
 
-- **Node.js**: v22.0.0 or higher.
-- **PNPM**: v10.0.0 or higher (`npm install -g pnpm`).
-- **Supabase CLI**: Latest version for local database development.
-- **Docker**: Required by Supabase CLI to run the local database.
+---
 
-## 1. Installation
-
-Clone the repository and install all monorepo dependencies:
+## 1. استنساخ المشروع
 
 ```bash
-git clone <your-repo-url> uniride
+git clone <repo-url> uniride
 cd uniride
 pnpm install
 ```
 
-## 2. Environment Setup
+---
 
-Create `.env` files across the necessary projects.
+## 2. إعداد متغيرات البيئة
 
 ```bash
 cp .env.example .env
 ```
 
-Ensure your `.env` contains:
+عدّل `.env` بالقيم التالية:
 
 ```env
-DATABASE_URL="postgres://postgres:postgres@127.0.0.1:54322/postgres"
-NEXT_PUBLIC_SUPABASE_URL="http://127.0.0.1:54321"
-NEXT_PUBLIC_SUPABASE_ANON_KEY="your-local-anon-key"
+# Supabase (Local Dev Project)
+NEXT_PUBLIC_SUPABASE_URL=https://pfjsqgqrxnrlrfnchnqf.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-local-anon-key>
+
+# Mobile App
+EXPO_PUBLIC_SUPABASE_URL=https://pfjsqgqrxnrlrfnchnqf.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=<your-local-anon-key>
+
+# Expo Push Notifications
+EXPO_TOKEN=<your-expo-token>
 ```
 
-## 3. Database Initialization & Seeding
+> **ملاحظة:** لا تضع قيم production في `.env` — استخدم `.env.local` أو Supabase Secrets.
 
-Start your local Supabase instance:
+---
+
+## 3. ربط Supabase
 
 ```bash
-supabase start
+# تسجيل الدخول
+supabase login
+
+# ربط بمشروع التطوير
+supabase link --project-ref pfjsqgqrxnrlrfnchnqf
+
+# التحقق من الربط
+supabase status
 ```
 
-Push the latest Drizzle schema to your local database:
+---
+
+## 4. تطبيق قاعدة البيانات
 
 ```bash
-pnpm --filter @uniride/db push
+# تطبيق جميع الـ migrations على مشروع التطوير
+supabase db push
+
+# التحقق من الـ migrations المطبقة
+supabase migration list
 ```
 
-Seed the database with mock data (Admin, Drivers, Routes):
+يجب أن ترى 16 migration مطبقاً بنجاح.
 
-```bash
-pnpm --filter @uniride/db run seed
-```
+---
 
-## 4. Running the Applications
+## 5. تشغيل التطبيقات
 
-### Admin Dashboard (Next.js)
+### لوحة التحكم (Admin Dashboard)
 
 ```bash
 pnpm --filter admin-dashboard dev
 ```
 
-Accessible at `http://localhost:3000`.
+افتح `http://localhost:3000` في المتصفح.
 
-### Mobile Application (Expo)
+**بيانات الدخول الافتراضية:**
+
+- البريد: `admin@uniride.com`
+- كلمة المرور: راجع Supabase Auth dashboard
+
+### التطبيق المحمول (Mobile App)
 
 ```bash
 pnpm --filter mobile-app start
 ```
 
-Use the Expo Go app on your phone to scan the QR code, or press `i` / `a` to run on iOS/Android emulators.
+- امسح QR code بتطبيق **Expo Go**
+- أو اضغط `i` لـ iOS Simulator / `a` لـ Android Emulator
 
-## 5. Deploying Edge Functions Locally
+---
 
-If you are testing the booking or trip tracking logic, you need to serve the edge functions:
+## 6. تشغيل Edge Functions محلياً
 
 ```bash
 supabase functions serve
+```
+
+ستعمل الـ functions على `http://localhost:54321/functions/v1/`
+
+---
+
+## 7. تشغيل الاختبارات
+
+```bash
+# اختبارات الوحدة والتكامل
+pnpm test
+
+# مع تقرير التغطية
+pnpm test -- --coverage
+
+# اختبارات E2E
+pnpm test:e2e
+```
+
+---
+
+## 8. أوامر التطوير اليومية
+
+```bash
+pnpm dev              # تشغيل كل التطبيقات معاً
+pnpm build            # بناء كل التطبيقات
+pnpm format --write   # تنسيق الكود
+pnpm typecheck        # فحص TypeScript
+```
+
+---
+
+## 9. هيكل المشروع
+
+```
+uniride/
+├── apps/
+│   ├── admin/                    ← Next.js 16 + Refine + MUI
+│   │   └── src/
+│   │       ├── app/              ← صفحات App Router
+│   │       │   ├── page.tsx      ← Dashboard
+│   │       │   ├── trips/        ← إدارة الرحلات
+│   │       │   ├── subscriptions/← إدارة الاشتراكات
+│   │       │   ├── drivers/      ← إدارة السائقين
+│   │       │   ├── routes/       ← إدارة الخطوط
+│   │       │   ├── licenses/     ← تتبع الأكواد
+│   │       │   ├── license_batches/ ← دفعات الأكواد
+│   │       │   ├── institutions/ ← إدارة المؤسسات
+│   │       │   ├── analytics/    ← تحليلات مع Date Range
+│   │       │   ├── feature-flags/← تفعيل/تعطيل الميزات
+│   │       │   └── profiles/     ← إدارة المستخدمين
+│   │       ├── components/
+│   │       │   └── layout.tsx    ← Sidebar navigation
+│   │       └── providers/
+│   │           ├── authProvider.ts   ← Auth (app_metadata فقط)
+│   │           ├── dataProvider.ts   ← snake_case ↔ camelCase
+│   │           └── supabaseClient.ts
+│   │
+│   └── mobile/                   ← Expo 54 + React Native
+│       ├── app/                  ← Expo Router screens
+│       │   ├── index.tsx         ← الرئيسية: خطوط الجامعة
+│       │   ├── booking.tsx       ← تفاصيل الخط
+│       │   ├── activate.tsx      ← تفعيل كود الترخيص
+│       │   ├── subscriptions.tsx ← اشتراكاتي
+│       │   ├── driver.tsx        ← لوحة السائق
+│       │   ├── create-trip.tsx   ← إنشاء رحلة
+│       │   ├── tracking/[tripId] ← تتبع الرحلة + خريطة
+│       │   └── rating/[tripId]   ← تقييم الرحلة
+│       └── src/
+│           ├── hooks/
+│           │   ├── useTrips.ts       ← GPS + Realtime + Offline
+│           │   ├── useRoutes.ts      ← Institution filtering
+│           │   ├── useNetworkStatus.ts ← ping() RPC
+│           │   ├── useFeatureFlags.ts  ← Feature flags + Realtime
+│           │   └── useStore.ts       ← 4 Zustand stores
+│           └── lib/
+│               ├── offlineCache.ts   ← Subscription offline cache
+│               └── logger.ts         ← Structured logger
+│
+├── packages/
+│   └── core/
+│       └── index.ts              ← Zod schemas, state machine, i18n
+│
+└── supabase/
+    ├── functions/
+    │   ├── trip-engine/          ← تحديث حالة الرحلة (v6)
+    │   ├── send-notification/    ← إشعارات Expo Push (v4)
+    │   ├── zaincash-checkout/    ← بوابة دفع (stub)
+    │   └── zaincash-webhook/     ← تأكيد الدفع (stub)
+    └── migrations/               ← 16 migration — مصدر الحقيقة
+```
+
+---
+
+## 10. حل المشاكل الشائعة
+
+### خطأ: `supabase: command not found`
+
+```bash
+winget install Supabase.CLI
+# أو
+npm install -g supabase
+```
+
+### خطأ: `Cannot find module '@uniride/core'`
+
+```bash
+pnpm install
+# تأكد من تشغيل الأمر من جذر المشروع
+```
+
+### خطأ: `RLS policy violation`
+
+- تأكد من أن المستخدم لديه `app_metadata.role` صحيح
+- راجع [SECURITY.md](./SECURITY.md)
+
+### الـ migrations لا تُطبَّق
+
+```bash
+supabase db push --dry-run  # اختبار أولاً
+supabase db push            # تطبيق فعلي
 ```

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   canTransition,
   TripStatus,
@@ -12,6 +12,7 @@ import {
   SubscriptionSchema,
   GeoCoordinates,
   Translations,
+  retryWithBackoff,
 } from './index';
 
 // ─── State Machine ─────────────────────────────────────────────────────────────
@@ -289,5 +290,92 @@ describe('Translations', () => {
     Object.entries(Translations.en).forEach(([key, value]) => {
       expect(value, `en.${key} is empty`).toBeTruthy();
     });
+  });
+});
+
+// ─── retryWithBackoff property tests ──────────────────────────────────────────
+describe('retryWithBackoff', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('resolves immediately when fn succeeds on first attempt', async () => {
+    const fn = vi.fn().mockResolvedValue('success');
+    const result = await retryWithBackoff(fn, { maxRetries: 3, baseDelayMs: 0 });
+    expect(result).toBe('success');
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves after N failures then success (Property 1)', async () => {
+    for (const failCount of [0, 1, 2, 3]) {
+      let calls = 0;
+      const fn = vi.fn().mockImplementation(() => {
+        calls++;
+        if (calls <= failCount) return Promise.reject(new Error(`fail ${calls}`));
+        return Promise.resolve(`success after ${failCount}`);
+      });
+
+      const promise = retryWithBackoff(fn, { maxRetries: 3, baseDelayMs: 1 });
+      // Advance timers to skip delays
+      await vi.runAllTimersAsync();
+      const result = await promise;
+
+      expect(result).toBe(`success after ${failCount}`);
+      expect(fn).toHaveBeenCalledTimes(failCount + 1);
+      fn.mockReset();
+    }
+  });
+
+  it('throws last error after exhaustion (Property 2)', async () => {
+    let attempt = 0;
+    const fn = vi.fn().mockImplementation(() => {
+      attempt++;
+      return Promise.reject(new Error(`error ${attempt}`));
+    });
+
+    // Run timers and await the rejection together
+    const result = await Promise.all([
+      expect(retryWithBackoff(fn, { maxRetries: 2, baseDelayMs: 1 })).rejects.toThrow('error 3'),
+      vi.runAllTimersAsync(),
+    ]);
+    void result;
+    expect(fn).toHaveBeenCalledTimes(3); // initial + 2 retries
+  });
+
+  it('stops immediately when shouldRetry returns false (Property 3)', async () => {
+    const specificError = new Error('non-retryable');
+    const fn = vi.fn().mockRejectedValue(specificError);
+    const shouldRetry = vi.fn().mockReturnValue(false);
+
+    await expect(
+      retryWithBackoff(fn, { maxRetries: 3, baseDelayMs: 1, shouldRetry }),
+    ).rejects.toThrow('non-retryable');
+
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(shouldRetry).toHaveBeenCalledWith(specificError);
+  });
+
+  it('retries when shouldRetry returns true', async () => {
+    let calls = 0;
+    const fn = vi.fn().mockImplementation(() => {
+      calls++;
+      if (calls < 3) return Promise.reject(new Error('retry me'));
+      return Promise.resolve('done');
+    });
+
+    const promise = retryWithBackoff(fn, {
+      maxRetries: 3,
+      baseDelayMs: 1,
+      shouldRetry: () => true,
+    });
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    expect(result).toBe('done');
+    expect(fn).toHaveBeenCalledTimes(3);
   });
 });

@@ -49,8 +49,8 @@ export const Header: React.FC = () => {
                 {user?.name}
               </Typography>
             )}
-            <Avatar src={user?.avatar} alt={user?.name}>
-              {user?.name?.charAt(0) || 'A'}
+            <Avatar src={user?.avatar ?? undefined} alt={user?.name ?? ''}>
+              {user?.name?.charAt(0) ?? 'A'}
             </Avatar>
           </Stack>
         </Stack>

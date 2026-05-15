@@ -8,3 +8,9 @@ test-results/
 .kilo/
 .gemini/
 *.tsbuildinfo
+
+# Supabase CLI local state — contains project refs, pooler URLs, org IDs
+supabase/.temp/
+
+# Expo build output — generated artifacts, not source
+apps/mobile/dist/

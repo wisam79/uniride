@@ -31,6 +31,32 @@ function transformKeys(obj: unknown, transform: (key: string) => string): unknow
 const snakeToCamel = (obj: unknown) => transformKeys(obj, toCamelCase);
 const camelToSnake = (obj: unknown) => transformKeys(obj, toSnakeCase);
 
+function mapSortersToSnake(sorters: unknown): unknown {
+  if (!Array.isArray(sorters)) return sorters;
+  return sorters.map((sorter) => {
+    if (!sorter || typeof sorter !== 'object') return sorter;
+    const record = sorter as Record<string, unknown>;
+    if (typeof record.field !== 'string') return sorter;
+    return { ...record, field: toSnakeCase(record.field) };
+  });
+}
+
+function mapFiltersToSnake(filters: unknown): unknown {
+  if (!Array.isArray(filters)) return filters;
+  return filters.map((filter) => {
+    if (!filter || typeof filter !== 'object') return filter;
+    const record = filter as Record<string, unknown>;
+    const mapped: Record<string, unknown> = { ...record };
+    if (typeof record.field === 'string') {
+      mapped.field = toSnakeCase(record.field);
+    }
+    if (Array.isArray(record.value)) {
+      mapped.value = record.value;
+    }
+    return mapped;
+  });
+}
+
 // ─── Wrapped dataProvider ──────────────────────────────────────────────────────
 
 const base = supabaseDataProvider(supabaseClient);
@@ -39,7 +65,13 @@ export const dataProvider: typeof base = {
   ...base,
 
   getList: async (params) => {
-    const result = await base.getList(params);
+    const paramsRecord = params as unknown as Record<string, unknown>;
+    const normalizedParams = {
+      ...params,
+      sorters: mapSortersToSnake(paramsRecord.sorters) as any,
+      filters: mapFiltersToSnake(paramsRecord.filters) as any,
+    };
+    const result = await base.getList(normalizedParams);
     return { ...result, data: snakeToCamel(result.data) as any };
   },
 
@@ -48,7 +80,7 @@ export const dataProvider: typeof base = {
         const result = await base.getMany!(params);
         return { ...result, data: snakeToCamel(result.data) as any };
       }
-    : undefined,
+    : (undefined as any),
 
   getOne: async (params) => {
     const result = await base.getOne(params);
@@ -79,5 +111,5 @@ export const dataProvider: typeof base = {
         const result = await base.custom!(params);
         return { ...result, data: snakeToCamel(result.data) as any };
       }
-    : undefined,
+    : (undefined as any),
 };

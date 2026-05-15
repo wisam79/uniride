@@ -1,180 +1,117 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { TripUpdateRequest } from '../../../packages/core/index.ts';
+import { getCorsHeaders } from '../_shared/cors.ts';
+import { errorResponse, getLanguage } from '../_shared/error.ts';
+import { logger } from '../_shared/logger.ts';
+import { initOtel, startSpan } from '../_shared/otel.ts';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-
-const ALLOWED_ORIGINS = [
-  Deno.env.get('ADMIN_URL') || 'http://localhost:3000',
-  'exp://localhost:8081',
-  'http://localhost:8081',
-].join(',');
-
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '',
-  'Access-Control-Allow-Headers':
-    'authorization, x-client-info, apikey, content-type, idempotency-key',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
-
-function resolveOrigin(origin: string): string {
-  const allowedOrigins = ALLOWED_ORIGINS.split(',');
-  return allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
-}
+const tracer = initOtel('trip-engine');
 
 Deno.serve(async (req: Request) => {
-  const origin = req.headers.get('Origin') || '';
-  const resolvedOrigin = resolveOrigin(origin);
-  const responseHeaders = {
-    ...CORS_HEADERS,
-    'Access-Control-Allow-Origin': resolvedOrigin,
-    'Content-Type': 'application/json',
-  };
+  const corsHeaders = getCorsHeaders(req);
+  const lang = getLanguage(req);
 
-  try {
-    if (req.method === 'OPTIONS') {
-      return new Response('ok', { headers: responseHeaders });
-    }
+  return startSpan(tracer, 'trip-engine.handle', async (span) => {
+    span.setAttribute('http.method', req.method);
+    span.setAttribute('http.url', req.url);
 
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
-        status: 401,
-        headers: responseHeaders,
-      });
-    }
+    try {
+      if (req.method === 'OPTIONS') {
+        return new Response('ok', { headers: corsHeaders });
+      }
 
-    const idempotencyKey = req.headers.get('idempotency-key');
+      const authHeader = req.headers.get('Authorization');
+      if (!authHeader) {
+        return errorResponse('unauthorized', 401, lang, undefined, corsHeaders);
+      }
 
-    const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
-    const token = authHeader.replace('Bearer ', '');
-    const {
-      data: { user },
-      error: authError,
-    } = await supabaseClient.auth.getUser(token);
+      const idempotencyKey = req.headers.get('idempotency-key');
 
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Invalid token' }), {
-        status: 401,
-        headers: responseHeaders,
-      });
-    }
+      const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
+      const token = authHeader.replace('Bearer ', '');
+      const {
+        data: { user },
+        error: authError,
+      } = await supabaseClient.auth.getUser(token);
 
-    const { data: rateLimitOk, error: rateLimitError } = await supabaseClient.rpc(
-      'check_rate_limit',
-      {
-        p_user_id: user.id, // FIX: pass explicitly — auth.uid() is NULL with service role key
-        p_action: 'trip_engine',
-        p_limit: 30,
-        p_window_seconds: 60,
-      },
-    );
+      if (authError || !user) {
+        return errorResponse('invalid_token', 401, lang, undefined, corsHeaders);
+      }
 
-    if (rateLimitError || !rateLimitOk) {
-      return new Response(JSON.stringify({ error: 'Too many requests. Please try again later.' }), {
-        status: 429,
-        headers: responseHeaders,
-      });
-    }
+      span.setAttribute('user.id', user.id);
 
-    const { tripId, newStatus, lat, lng } = await req.json();
+      const { data: rateLimitOk, error: rateLimitError } = await supabaseClient.rpc(
+        'check_rate_limit',
+        {
+          p_user_id: user.id,
+          p_action: 'trip_engine',
+          p_limit: 30,
+          p_window_seconds: 60,
+        },
+      );
 
-    if (!tripId || !newStatus) {
-      return new Response(JSON.stringify({ error: 'Missing tripId or newStatus' }), {
-        status: 400,
-        headers: responseHeaders,
-      });
-    }
+      if (rateLimitError || !rateLimitOk) {
+        return errorResponse('too_many_requests', 429, lang, undefined, corsHeaders);
+      }
 
-    const validStatuses = [
-      'scheduled',
-      'driver_waiting',
-      'in_transit',
-      'completed',
-      'absent',
-      'cancelled',
-    ];
-    if (!validStatuses.includes(newStatus)) {
-      return new Response(JSON.stringify({ error: 'Invalid status value' }), {
-        status: 400,
-        headers: responseHeaders,
-      });
-    }
+      const parsed = TripUpdateRequest.safeParse(await req.json());
+      if (!parsed.success) {
+        logger.warn('Invalid input', { details: parsed.error.flatten(), userId: user.id });
+        return errorResponse('invalid_input', 400, lang, parsed.error.flatten(), corsHeaders);
+      }
+      const { tripId, newStatus, lat, lng } = parsed.data;
 
-    // lat/lng are optional — only relevant for certain transitions (e.g. driver_waiting)
-    const validLat = typeof lat === 'number' ? lat : null;
-    const validLng = typeof lng === 'number' ? lng : null;
+      span.setAttribute('trip.id', tripId);
+      span.setAttribute('trip.new_status', newStatus);
 
-    const { data: driverData, error: driverError } = await supabaseClient
-      .from('drivers')
-      .select('id')
-      .eq('user_id', user.id)
-      .single();
-
-    if (driverError || !driverData) {
-      return new Response(JSON.stringify({ error: 'Driver profile not found' }), {
-        status: 403,
-        headers: responseHeaders,
-      });
-    }
-
-    if (idempotencyKey) {
-      const { data: existingAudit } = await supabaseClient
-        .from('audit_logs')
+      const { data: driverData, error: driverError } = await supabaseClient
+        .from('drivers')
         .select('id')
         .eq('user_id', user.id)
-        .eq('action', 'trip_status_change')
-        .eq('resource_id', tripId)
-        .eq('details->>idempotencyKey', idempotencyKey)
         .single();
 
-      if (existingAudit) {
-        return new Response(
-          JSON.stringify({
-            success: true,
-            message: 'Status already updated (idempotent response)',
-            idempotent: true,
-          }),
-          {
-            headers: responseHeaders,
-          },
-        );
+      if (driverError || !driverData) {
+        return errorResponse('driver_not_found', 403, lang, undefined, corsHeaders);
       }
-    }
 
-    const { error } = await supabaseClient.rpc('update_trip_status', {
-      p_trip_id: tripId,
-      p_new_status: newStatus,
-      p_lat: validLat,
-      p_lng: validLng,
-      p_driver_id: driverData.id,
-    });
-
-    if (error) {
-      return new Response(JSON.stringify({ success: false, error: error.message }), {
-        status: 400,
-        headers: responseHeaders,
+      const { error } = await supabaseClient.rpc('update_trip_status', {
+        p_trip_id: tripId,
+        p_new_status: newStatus,
+        p_lat: lat ?? null,
+        p_lng: lng ?? null,
+        p_driver_id: driverData.id,
+        p_idempotency_key: idempotencyKey ?? null,
       });
+
+      if (error) {
+        if (error.message.includes('IDEMPOTENT_REQUEST')) {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              message: 'Status already updated (idempotent response)',
+              idempotent: true,
+            }),
+            {
+              headers: corsHeaders,
+            },
+          );
+        }
+
+        logger.error('Failed to update trip status', { error: error.message, tripId, newStatus });
+        return new Response(JSON.stringify({ success: false, error: error.message }), {
+          status: 400,
+          headers: corsHeaders,
+        });
+      }
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: corsHeaders,
+      });
+    } catch (err) {
+      logger.error('Internal server error', { error: String(err) });
+      return errorResponse('something_went_wrong', 500, lang, undefined, corsHeaders);
     }
-
-    await supabaseClient.rpc('log_audit', {
-      p_user_id: user.id,
-      p_action: 'trip_status_change',
-      p_resource: 'trips',
-      p_resource_id: tripId,
-      p_details: { newStatus, lat, lng, idempotencyKey },
-    });
-
-    return new Response(JSON.stringify({ success: true }), {
-      headers: responseHeaders,
-    });
-  } catch (err) {
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
-      status: 500,
-      headers: {
-        ...CORS_HEADERS,
-        'Access-Control-Allow-Origin': resolvedOrigin,
-        'Content-Type': 'application/json',
-      },
-    });
-  }
+  });
 });

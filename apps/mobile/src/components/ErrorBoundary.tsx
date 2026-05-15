@@ -1,12 +1,9 @@
 import React, { Component, ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Translations, Language } from '@uniride/core';
+import { logger } from '../lib/logger';
+import { Colors } from '../theme';
 import { useI18nStore } from '../hooks/useStore';
-
-function t(key: string): string {
-  const lang: Language = useI18nStore.getState().language;
-  return Translations[lang]?.[key] ?? Translations['en']?.[key] ?? key;
-}
+import { Translations } from '@uniride/core';
 
 interface Props {
   children: ReactNode;
@@ -15,33 +12,101 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+  retryCount: number;
+  fallbackCrashed: boolean;
+}
+
+const MAX_RETRIES = 3;
+
+function t(key: string): string {
+  const language = useI18nStore.getState().language;
+  return Translations[language]?.[key] ?? Translations['en']?.[key] ?? key;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
-  state: State = { hasError: false, error: null };
+  state: State = {
+    hasError: false,
+    error: null,
+    retryCount: 0,
+    fallbackCrashed: false,
+  };
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error };
   }
 
-  handleReset = () => {
-    this.setState({ hasError: false, error: null });
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    logger.error(error.message, {
+      componentStack: info.componentStack ?? '',
+    });
+  }
+
+  handleRetry = () => {
+    if (this.state.retryCount >= MAX_RETRIES) return;
+    this.setState((prev) => ({
+      hasError: false,
+      error: null,
+      retryCount: prev.retryCount + 1,
+    }));
   };
 
+  renderFallback() {
+    const { error, retryCount } = this.state;
+    const isExhausted = retryCount >= MAX_RETRIES;
+
+    // Truncate error description to max 200 chars
+    const errorDescription = error?.message ? error.message.slice(0, 200) : t('unexpected_error');
+
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>{t('app_error')}</Text>
+
+        <Text style={styles.message}>{errorDescription}</Text>
+
+        {isExhausted ? (
+          <Text style={styles.restartMessage}>{t('please_restart')}</Text>
+        ) : (
+          <TouchableOpacity
+            style={[styles.button, isExhausted && styles.buttonDisabled]}
+            onPress={this.handleRetry}
+            disabled={isExhausted}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: isExhausted }}
+          >
+            <Text style={styles.buttonText}>{t('retry')}</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  }
+
   render() {
-    if (this.state.hasError) {
+    if (!this.state.hasError) {
+      return this.props.children;
+    }
+
+    // If the fallback UI itself crashes, show a hardcoded static string
+    if (this.state.fallbackCrashed) {
       return (
         <View style={styles.container}>
-          <Text style={styles.title}>{t('something_went_wrong')}</Text>
-          <Text style={styles.message}>{this.state.error?.message || t('error_generic')}</Text>
-          <TouchableOpacity style={styles.button} onPress={this.handleReset}>
-            <Text style={styles.buttonText}>{t('try_again')}</Text>
-          </TouchableOpacity>
+          <Text style={styles.title}>Error</Text>
+          <Text style={styles.message}>Please restart the application.</Text>
         </View>
       );
     }
 
-    return this.props.children;
+    try {
+      return this.renderFallback();
+    } catch {
+      // Fallback crashed — switch to static hardcoded UI
+      this.setState({ fallbackCrashed: true });
+      return (
+        <View style={styles.container}>
+          <Text style={styles.title}>Error</Text>
+          <Text style={styles.message}>Please restart the application.</Text>
+        </View>
+      );
+    }
   }
 }
 
@@ -51,29 +116,44 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: Colors.background,
   },
   title: {
     fontSize: 22,
     fontWeight: 'bold',
-    color: '#FF3B30',
+    color: Colors.error,
     marginBottom: 12,
+    textAlign: 'center',
   },
   message: {
     fontSize: 14,
-    color: '#666',
+    color: Colors.textSecondary,
     textAlign: 'center',
-    marginBottom: 24,
-    maxWidth: 300,
+    marginBottom: 16,
+    lineHeight: 22,
+  },
+  restartMessage: {
+    fontSize: 14,
+    color: Colors.warning,
+    textAlign: 'center',
+    marginTop: 12,
+    fontWeight: 'bold',
   },
   button: {
-    backgroundColor: '#007AFF',
+    backgroundColor: Colors.primary,
     paddingHorizontal: 32,
     paddingVertical: 14,
     borderRadius: 12,
+    marginTop: 12,
+    width: '100%',
+    alignItems: 'center',
+  },
+  buttonDisabled: {
+    backgroundColor: Colors.textMuted,
+    opacity: 0.6,
   },
   buttonText: {
-    color: '#fff',
+    color: Colors.white,
     fontWeight: 'bold',
     fontSize: 16,
   },

@@ -1,38 +1,27 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { CheckoutRequest } from '../../../packages/core/index.ts';
+import { getCorsHeaders } from '../_shared/cors.ts';
+import { errorResponse, getLanguage } from '../_shared/error.ts';
+import { logger } from '../_shared/logger.ts';
 
 /**
  * ZainCash Checkout — Stub Implementation
- *
- * Full activation requires:
- *   - ZAINCASH_MSISDN   (merchant phone number)
- *   - ZAINCASH_SECRET   (JWT signing secret from ZainCash dashboard)
- *   - ZAINCASH_MERCHANT_ID
- *
- * Flow when credentials are available:
- *   1. Sign a JWT with { amount, serviceType, msisdn, orderId, redirectUrl, iat }
- *   2. POST to https://api.zaincash.iq/transaction/init → get { token, id }
- *   3. Return redirect URL: https://api.zaincash.iq/transaction/pay?id=<id>
+ * ...
  */
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
-
-const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-  });
-
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
+  const corsHeaders = getCorsHeaders(req);
+  const lang = getLanguage(req);
+
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
 
   try {
     // ── Auth ──────────────────────────────────────────────────────────────────
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) return json({ error: 'Unauthorized' }, 401);
+    if (!authHeader) return errorResponse('unauthorized', 401, lang, undefined, corsHeaders);
+    const idempotencyKey = req.headers.get('idempotency-key');
 
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -44,16 +33,68 @@ Deno.serve(async (req: Request) => {
       data: { user },
       error: authError,
     } = await supabaseAdmin.auth.getUser(token);
-    if (authError || !user) return json({ error: 'Invalid token' }, 401);
+    if (authError || !user) return errorResponse('invalid_token', 401, lang, undefined, corsHeaders);
 
-    // Only students can initiate checkout
     const role = user.app_metadata?.role;
-    if (role !== 'student') return json({ error: 'Only students can initiate checkout' }, 403);
+    if (role !== 'student') return errorResponse('unauthorized', 403, lang, undefined, corsHeaders);
 
-    // ── Validate body ─────────────────────────────────────────────────────────
-    const { routeId, amount } = await req.json();
-    if (!routeId || !amount) return json({ error: 'Missing routeId or amount' }, 400);
-    if (typeof amount !== 'number' || amount <= 0) return json({ error: 'Invalid amount' }, 400);
+    const { data: rateLimitOk, error: rateLimitError } = await supabaseAdmin.rpc(
+      'check_rate_limit',
+      {
+        p_user_id: user.id,
+        p_action: 'zaincash_checkout',
+        p_limit: 5,
+        p_window_seconds: 60,
+      },
+    );
+
+    if (rateLimitError || !rateLimitOk) {
+      return errorResponse('too_many_requests', 429, lang, undefined, corsHeaders);
+    }
+
+    if (idempotencyKey) {
+      const { data: existingAudit } = await supabaseAdmin
+        .from('audit_logs')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('action', 'zaincash_checkout')
+        .eq('resource_id', 'checkout') // We use a generic ID if specific one not yet created
+        .eq('details->>idempotencyKey', idempotencyKey)
+        .single();
+
+      if (existingAudit) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            idempotent: true,
+            message: 'Checkout already processed',
+          }),
+          { status: 200, headers: corsHeaders }
+        );
+      }
+    }
+
+    const parsed = CheckoutRequest.safeParse(await req.json());
+    if (!parsed.success) {
+      logger.warn('Invalid input', { details: parsed.error.flatten(), userId: user.id });
+      return errorResponse('invalid_input', 400, lang, parsed.error.flatten(), corsHeaders);
+    }
+    const { routeId } = parsed.data;
+
+    const { data: routeData, error: routeError } = await supabaseAdmin
+      .from('routes')
+      .select('price')
+      .eq('id', routeId)
+      .single();
+
+    if (routeError || !routeData) {
+      return errorResponse('route_not_found', 404, lang, undefined, corsHeaders);
+    }
+
+    const amount = routeData.price;
+    if (typeof amount !== 'number' || amount <= 0) {
+      return errorResponse('invalid_input', 400, lang, { message: 'Invalid route price' }, corsHeaders);
+    }
 
     // ── Check if ZainCash credentials are configured ──────────────────────────
     const zaincashSecret = Deno.env.get('ZAINCASH_SECRET');
@@ -61,29 +102,31 @@ Deno.serve(async (req: Request) => {
     const zaincashMerchantId = Deno.env.get('ZAINCASH_MERCHANT_ID');
 
     if (!zaincashSecret || !zaincashMsisdn || !zaincashMerchantId) {
-      // Stub mode — return a test URL
-      console.warn('[ZainCash] Running in stub mode — credentials not configured');
-      return json({
-        success: true,
-        stub: true,
-        paymentUrl: `https://test.zaincash.iq/transaction/pay?id=stub_${Date.now()}`,
-        message:
-          'ZainCash is in stub mode. Configure ZAINCASH_SECRET, ZAINCASH_MSISDN, ZAINCASH_MERCHANT_ID to enable real payments.',
+      logger.warn('[ZainCash] Running in stub mode — credentials not configured', { userId: user.id, routeId });
+      
+      await supabaseAdmin.rpc('log_audit', {
+        p_user_id: user.id,
+        p_action: 'zaincash_checkout',
+        p_resource: 'routes',
+        p_resource_id: routeId,
+        p_details: { idempotencyKey, amount, stub: true },
       });
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          stub: true,
+          paymentUrl: `https://test.zaincash.iq/transaction/pay?id=stub_${Date.now()}`,
+          message: 'ZainCash is in stub mode. Configure credentials for production.',
+        }),
+        { status: 200, headers: corsHeaders }
+      );
     }
 
-    // ── Real implementation (when credentials are set) ────────────────────────
-    // TODO: Implement when merchant credentials are provided
-    // const orderId = crypto.randomUUID();
-    // const payload = { amount, serviceType: "UniRide", msisdn: zaincashMsisdn, orderId, redirectUrl: "...", iat: Math.floor(Date.now() / 1000) };
-    // const jwtToken = await signJwt(payload, zaincashSecret);
-    // const initRes = await fetch("https://api.zaincash.iq/transaction/init", { method: "POST", body: JSON.stringify({ token: jwtToken, merchantId: zaincashMerchantId }) });
-    // const { id } = await initRes.json();
-    // return json({ success: true, paymentUrl: `https://api.zaincash.iq/transaction/pay?id=${id}` });
-
-    return json({ error: 'ZainCash real implementation pending merchant credentials' }, 501);
+    // Real implementation TODO
+    return errorResponse('something_went_wrong', 501, lang, { message: 'ZainCash real implementation pending' }, corsHeaders);
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
-    return json({ error: message }, 500);
+    logger.error('Internal server error', { error: String(err) });
+    return errorResponse('something_went_wrong', 500, lang, undefined, corsHeaders);
   }
 });

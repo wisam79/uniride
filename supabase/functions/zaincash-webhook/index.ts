@@ -1,70 +1,113 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { ZainCashWebhookRequest } from '../../../packages/core/index.ts';
+import { errorResponse, getLanguage } from '../_shared/error.ts';
+import { logger } from '../_shared/logger.ts';
 
 /**
  * ZainCash Webhook — Stub Implementation
- *
- * ZainCash calls this endpoint after payment with a signed JWT in the query string.
- * Full activation requires ZAINCASH_SECRET to verify the JWT signature.
- *
- * Expected query param: ?token=<jwt>
- * JWT payload: { id, key, type, status, amount, orderId, date, merchantId, msisdn }
+ * ...
  */
 
-Deno.serve(async (req: Request) => {
-  try {
-    const url = new URL(req.url);
-    const token = url.searchParams.get('token');
+// ─── HMAC Signature Verification ─────────────────────────────────────────────
 
-    if (!token) {
-      return new Response(JSON.stringify({ error: 'Missing token' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
+/**
+ * Verifies HMAC-SHA256 signature using constant-time comparison to prevent timing attacks.
+ */
+async function verifyHmacSignature(
+  body: string,
+  signature: string,
+  secret: string,
+): Promise<boolean> {
+  try {
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(secret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign'],
+    );
+
+    const mac = await crypto.subtle.sign('HMAC', key, encoder.encode(body));
+    const expected = Array.from(new Uint8Array(mac))
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+
+    // Constant-time comparison to prevent timing attacks
+    if (expected.length !== signature.length) return false;
+    let diff = 0;
+    for (let i = 0; i < expected.length; i++) {
+      diff |= (expected.charCodeAt(i) ?? 0) ^ (signature.charCodeAt(i) ?? 0);
+    }
+    return diff === 0;
+  } catch {
+    return false;
+  }
+}
+
+Deno.serve(async (req: Request) => {
+  const lang = getLanguage(req);
+
+  try {
+    // ── 1. Extract HMAC signature ─────────────────────────────────────────────
+    const signature = req.headers.get('X-ZainCash-Signature');
+
+    if (!signature) {
+      return errorResponse('invalid_input', 400, lang, { message: 'Missing signature' });
     }
 
+    // ── 2. Check secret is configured ────────────────────────────────────────
     const zaincashSecret = Deno.env.get('ZAINCASH_SECRET');
 
     if (!zaincashSecret) {
-      // Stub mode — log and acknowledge
-      console.warn(
-        '[ZainCash Webhook] Stub mode — ZAINCASH_SECRET not configured. Token received:',
-        token.substring(0, 20) + '...',
-      );
-      return new Response(JSON.stringify({ received: true, stub: true }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      logger.warn('[ZainCash Webhook] ZAINCASH_SECRET not configured');
+      return errorResponse('something_went_wrong', 503, lang, { message: 'Webhook not configured' });
     }
 
-    // ── Real implementation (when credentials are set) ────────────────────────
-    // TODO: Implement when merchant credentials are provided
-    //
-    // 1. Verify JWT signature using zaincashSecret
-    //    const payload = await verifyJwt(token, zaincashSecret);
-    //
-    // 2. Check payment status
-    //    if (payload.status !== "success") return acknowledge without action
-    //
-    // 3. Extract orderId → look up pending subscription in DB
-    //    const { data: order } = await supabaseAdmin.from("payment_orders").select("*").eq("id", payload.orderId).single();
-    //
-    // 4. Activate the license / subscription
-    //    await supabaseAdmin.rpc("activate_license", { p_code: order.license_code });
-    //
-    // 5. Log the transaction for audit
-    //    await supabaseAdmin.rpc("log_audit", { ... });
+    // ── 3. Read body for HMAC verification ───────────────────────────────────
+    const body = await req.text();
 
-    console.warn('[ZainCash Webhook] Real implementation pending merchant credentials');
+    // ── 4. Verify HMAC signature ──────────────────────────────────────────────
+    const isValid = await verifyHmacSignature(body, signature, zaincashSecret);
+
+    if (!isValid) {
+      const clientIp = req.headers.get('x-forwarded-for') ?? 'unknown';
+      logger.warn('[ZainCash Webhook] Invalid HMAC signature', {
+        ip: clientIp,
+        signaturePrefix: signature.substring(0, 8),
+      });
+      return errorResponse('unauthorized', 401, lang, { message: 'Invalid signature' });
+    }
+
+    // ── 5. Parse body (already read as text) ─────────────────────────────────
+    let parsedBody: Record<string, unknown>;
+    try {
+      parsedBody = JSON.parse(body) as Record<string, unknown>;
+    } catch {
+      return errorResponse('invalid_input', 400, lang, { message: 'Invalid JSON body' });
+    }
+
+    // Combine body and query for validation
+    const combined = {
+      ...Object.fromEntries(new URL(req.url).searchParams),
+      ...parsedBody,
+    };
+
+    const parsed = ZainCashWebhookRequest.safeParse(combined);
+    if (!parsed.success) {
+      logger.warn('Invalid input', { details: parsed.error.flatten() });
+      return errorResponse('invalid_input', 400, lang, parsed.error.flatten());
+    }
+    const { token } = parsed.data;
+
+    // ── 6. Process payment (existing stub logic) ──────────────────────────────
+    logger.warn('[ZainCash Webhook] Real implementation pending merchant credentials', { token: token.substring(0, 20) });
+    
     return new Response(JSON.stringify({ received: true }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
-    console.warn('[ZainCash Webhook] Error:', message);
-    return new Response(JSON.stringify({ error: message }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    logger.error('[ZainCash Webhook] Unhandled error', { error: String(err) });
+    return errorResponse('something_went_wrong', 500, lang);
   }
 });
