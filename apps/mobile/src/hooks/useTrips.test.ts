@@ -26,6 +26,13 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   },
 }));
 
+vi.mock('expo-secure-store', () => ({
+  getItemAsync: vi.fn().mockResolvedValue(null),
+  setItemAsync: vi.fn().mockResolvedValue(undefined),
+  deleteItemAsync: vi.fn().mockResolvedValue(undefined),
+  WHEN_UNLOCKED: 'WHEN_UNLOCKED',
+}));
+
 vi.mock('expo-location', () => ({
   requestForegroundPermissionsAsync: vi.fn().mockResolvedValue({ status: 'granted' }),
   watchPositionAsync: vi.fn().mockResolvedValue({ remove: vi.fn() }),
@@ -51,11 +58,10 @@ describe('GPS Queue — flushGpsQueue', () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
     mockRpc.mockResolvedValue({ error: null }); // both succeed
 
-    // Import the module to trigger the flush
-    const { flushGpsQueueForTest } = await import('./useTrips');
-    if (flushGpsQueueForTest) {
-      await flushGpsQueueForTest();
-      // Queue should be cleared since all succeeded
+    // Import from the new location
+    const { flushGpsQueue } = await import('./useLocationTracker');
+    if (flushGpsQueue) {
+      await flushGpsQueue();
       expect(AsyncStorage.removeItem).toHaveBeenCalled();
     }
   });
@@ -65,12 +71,11 @@ describe('GPS Queue — flushGpsQueue', () => {
 
     vi.mocked(AsyncStorage.getItem).mockResolvedValue(JSON.stringify(queue));
     mockGetUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
-    mockRpc.mockResolvedValue({ error: { message: 'Network error' } }); // fails
+    mockRpc.mockResolvedValue({ error: { message: 'Network error' } });
 
-    const { flushGpsQueueForTest } = await import('./useTrips');
-    if (flushGpsQueueForTest) {
-      await flushGpsQueueForTest();
-      // Should keep the item (retries becomes 2, still < 3)
+    const { flushGpsQueue } = await import('./useLocationTracker');
+    if (flushGpsQueue) {
+      await flushGpsQueue();
       expect(AsyncStorage.setItem).toHaveBeenCalled();
     }
   });
@@ -80,12 +85,11 @@ describe('GPS Queue — flushGpsQueue', () => {
 
     vi.mocked(AsyncStorage.getItem).mockResolvedValue(JSON.stringify(queue));
     mockGetUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
-    mockRpc.mockResolvedValue({ error: { message: 'Network error' } }); // fails again
+    mockRpc.mockResolvedValue({ error: { message: 'Network error' } });
 
-    const { flushGpsQueueForTest } = await import('./useTrips');
-    if (flushGpsQueueForTest) {
-      await flushGpsQueueForTest();
-      // retries becomes 3 → dropped → queue empty → removeItem
+    const { flushGpsQueue } = await import('./useLocationTracker');
+    if (flushGpsQueue) {
+      await flushGpsQueue();
       expect(AsyncStorage.removeItem).toHaveBeenCalled();
     }
   });
@@ -93,9 +97,9 @@ describe('GPS Queue — flushGpsQueue', () => {
   it('does nothing when queue is empty', async () => {
     vi.mocked(AsyncStorage.getItem).mockResolvedValue(null);
 
-    const { flushGpsQueueForTest } = await import('./useTrips');
-    if (flushGpsQueueForTest) {
-      await flushGpsQueueForTest();
+    const { flushGpsQueue } = await import('./useLocationTracker');
+    if (flushGpsQueue) {
+      await flushGpsQueue();
       expect(mockRpc).not.toHaveBeenCalled();
     }
   });

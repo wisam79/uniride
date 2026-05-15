@@ -1,12 +1,13 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { secureStorage } from '../lib/secureStorage';
 import { UserRole, TripStatus, Language } from '@uniride/core';
 
 interface AuthUser {
   id: string;
   email?: string;
-  user_metadata?: Record<string, unknown>;
+  // NOTE: user_metadata is intentionally excluded — use app_metadata.role via authProvider only
 }
 
 interface AuthState {
@@ -38,8 +39,8 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'auth-storage',
-      storage: createJSONStorage(() => AsyncStorage),
-      partialize: (state) => ({ role: state.role, profile: state.profile }),
+      storage: createJSONStorage(() => secureStorage),
+      partialize: (state) => ({ user: state.user, role: state.role, profile: state.profile }),
     },
   ),
 );
@@ -98,7 +99,7 @@ export const useBookingStore = create<BookingState>()(
     }),
     {
       name: 'booking-storage',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: createJSONStorage(() => secureStorage),
     },
   ),
 );

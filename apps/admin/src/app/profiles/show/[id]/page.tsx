@@ -2,7 +2,7 @@
 
 import { Show, TextFieldComponent as TextField } from '@refinedev/mui';
 import { Typography, Stack, Chip } from '@mui/material';
-import { useShow } from '@refinedev/core';
+import { useShow, useOne } from '@refinedev/core';
 
 const ROLE_COLORS: Record<
   string,
@@ -18,6 +18,15 @@ export default function ProfileShow() {
   const { data, isLoading } = queryResult;
   const record = data?.data;
 
+  // ✅ جلب اسم المؤسسة بدلاً من عرض UUID
+  const { data: institutionData, isLoading: institutionLoading } = useOne({
+    resource: 'institutions',
+    id: record?.institutionId || record?.institution_id || '',
+    queryOptions: {
+      enabled: !!(record?.institutionId || record?.institution_id),
+    },
+  });
+
   return (
     <Show isLoading={isLoading}>
       <Stack gap={1}>
@@ -29,7 +38,7 @@ export default function ProfileShow() {
         <Typography variant="body1" fontWeight="bold">
           Full Name
         </Typography>
-        <TextField value={record?.fullName} />
+        <TextField value={record?.fullName ?? record?.full_name} />
 
         <Typography variant="body1" fontWeight="bold">
           Phone
@@ -42,14 +51,31 @@ export default function ProfileShow() {
         <Chip label={record?.role} color={ROLE_COLORS[record?.role] || 'default'} size="small" />
 
         <Typography variant="body1" fontWeight="bold">
-          Institution ID
+          Verified
         </Typography>
-        <TextField value={record?.institutionId || 'N/A'} />
+        <Chip
+          label={(record?.isVerified ?? record?.is_verified) ? 'Verified' : 'Not Verified'}
+          color={(record?.isVerified ?? record?.is_verified) ? 'success' : 'default'}
+          size="small"
+        />
+
+        <Typography variant="body1" fontWeight="bold">
+          Institution
+        </Typography>
+        <TextField
+          value={institutionLoading ? 'Loading...' : (institutionData?.data?.name ?? 'N/A')}
+        />
 
         <Typography variant="body1" fontWeight="bold">
           Joined
         </Typography>
-        <TextField value={record?.createdAt ? new Date(record.createdAt).toLocaleString() : '-'} />
+        <TextField
+          value={
+            (record?.createdAt ?? record?.created_at)
+              ? new Date(record?.createdAt ?? record?.created_at).toLocaleString()
+              : '-'
+          }
+        />
       </Stack>
     </Show>
   );

@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import { supabase } from '../src/lib/supabase';
 import { useTranslation } from '../src/hooks/useTranslation';
-import { UserRole } from '@uniride/core';
 import { Colors, Typography, Spacing, BorderRadius, Shadow, FontFamily } from '../src/theme';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -22,7 +21,6 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [isSignup, setIsSignup] = useState(false);
-  const [selectedRole, setSelectedRole] = useState<UserRole>('student');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const { t, isRTL } = useTranslation();
@@ -32,7 +30,7 @@ export default function LoginScreen() {
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
-      Alert.alert('خطأ', error.message);
+      Alert.alert(t('error'), error.message);
     }
     setLoading(false);
   };
@@ -53,11 +51,11 @@ export default function LoginScreen() {
     });
 
     if (error) {
-      Alert.alert('خطأ', error.message);
+      Alert.alert(t('error'), error.message);
     } else if (data.session) {
-      Alert.alert('مرحباً', 'تم إنشاء الحساب بنجاح!');
+      Alert.alert(t('hello'), t('account_created'));
     } else {
-      Alert.alert('تحقق من بريدك', 'أرسلنا لك رابط تفعيل على بريدك الإلكتروني');
+      Alert.alert(t('check_inbox_title'), t('check_inbox_msg'));
     }
     setLoading(false);
   };
@@ -79,12 +77,12 @@ export default function LoginScreen() {
           </View>
           <Text style={styles.appName}>UniRide</Text>
           <Text style={styles.appNameAr}>يوني رايد</Text>
-          <Text style={styles.tagline}>نقل جامعي ذكي</Text>
+          <Text style={styles.tagline}>{t('uniride_tagline')}</Text>
         </View>
 
         {/* Card */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>{isSignup ? 'إنشاء حساب جديد' : 'تسجيل الدخول'}</Text>
+          <Text style={styles.cardTitle}>{isSignup ? t('signup') : t('login')}</Text>
 
           {isSignup && (
             <View style={styles.inputWrapper}>
@@ -96,7 +94,7 @@ export default function LoginScreen() {
               />
               <TextInput
                 style={[styles.input, isRTL && styles.inputRTL]}
-                placeholder="الاسم الكامل"
+                placeholder={t('full_name')}
                 placeholderTextColor={Colors.textMuted}
                 value={fullName}
                 onChangeText={setFullName}
@@ -114,7 +112,7 @@ export default function LoginScreen() {
             />
             <TextInput
               style={[styles.input, isRTL && styles.inputRTL]}
-              placeholder="البريد الإلكتروني"
+              placeholder={t('email')}
               placeholderTextColor={Colors.textMuted}
               value={email}
               onChangeText={setEmail}
@@ -132,7 +130,7 @@ export default function LoginScreen() {
             />
             <TextInput
               style={[styles.input, styles.inputPassword, isRTL && styles.inputRTL]}
-              placeholder="كلمة المرور"
+              placeholder={t('password')}
               placeholderTextColor={Colors.textMuted}
               secureTextEntry={!showPassword}
               value={password}
@@ -150,36 +148,6 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
 
-          {isSignup && (
-            <View style={styles.roleSection}>
-              <Text style={styles.roleLabel}>أنا...</Text>
-              <View style={styles.roleRow}>
-                {(['student', 'driver'] as UserRole[]).map((role) => (
-                  <TouchableOpacity
-                    key={role}
-                    style={[styles.roleChip, selectedRole === role && styles.roleChipActive]}
-                    onPress={() => setSelectedRole(role)}
-                  >
-                    <Ionicons
-                      name={role === 'student' ? 'school-outline' : 'car-outline'}
-                      size={16}
-                      color={selectedRole === role ? Colors.white : Colors.primary}
-                      style={{ marginLeft: Spacing.xs }}
-                    />
-                    <Text
-                      style={[
-                        styles.roleChipText,
-                        selectedRole === role && styles.roleChipTextActive,
-                      ]}
-                    >
-                      {role === 'student' ? 'طالب' : 'سائق'}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          )}
-
           <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
             onPress={isSignup ? handleSignup : handleLogin}
@@ -189,13 +157,29 @@ export default function LoginScreen() {
             {loading ? (
               <ActivityIndicator color={Colors.white} />
             ) : (
-              <Text style={styles.buttonText}>{isSignup ? 'إنشاء الحساب' : 'تسجيل الدخول'}</Text>
+              <Text style={styles.buttonText}>{isSignup ? t('signup') : t('login')}</Text>
             )}
           </TouchableOpacity>
 
           {!isSignup && (
-            <TouchableOpacity style={styles.forgotButton}>
-              <Text style={styles.forgotText}>نسيت كلمة المرور؟</Text>
+            <TouchableOpacity
+              style={styles.forgotButton}
+              onPress={async () => {
+                if (!email.trim()) {
+                  Alert.alert(t('alert'), t('enter_email_first'));
+                  return;
+                }
+                setLoading(true);
+                const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
+                setLoading(false);
+                if (error) {
+                  Alert.alert(t('error'), error.message);
+                } else {
+                  Alert.alert(t('sent'), t('reset_link_sent'));
+                }
+              }}
+            >
+              <Text style={styles.forgotText}>{t('forgot_password')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -203,8 +187,8 @@ export default function LoginScreen() {
         {/* Switch Mode */}
         <TouchableOpacity onPress={() => setIsSignup(!isSignup)} style={styles.switchButton}>
           <Text style={styles.switchText}>
-            {isSignup ? 'لديك حساب بالفعل؟ ' : 'لا تملك حساباً؟ '}
-            <Text style={styles.switchLink}>{isSignup ? 'تسجيل الدخول' : 'إنشاء حساب جديد'}</Text>
+            {isSignup ? t('already_have_account') : t('dont_have_account')}
+            <Text style={styles.switchLink}>{isSignup ? t('login') : t('signup')}</Text>
           </Text>
         </TouchableOpacity>
       </ScrollView>
@@ -301,43 +285,6 @@ const styles = StyleSheet.create({
   },
   eyeButton: {
     padding: Spacing.xs,
-  },
-  // Role
-  roleSection: {
-    marginBottom: Spacing.lg,
-  },
-  roleLabel: {
-    fontFamily: FontFamily.medium,
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginBottom: Spacing.sm,
-    textAlign: 'right',
-  },
-  roleRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    justifyContent: 'flex-end',
-  },
-  roleChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.pill,
-    borderWidth: 1.5,
-    borderColor: Colors.primary,
-    gap: Spacing.xs,
-  },
-  roleChipActive: {
-    backgroundColor: Colors.primary,
-  },
-  roleChipText: {
-    fontFamily: FontFamily.medium,
-    fontSize: 14,
-    color: Colors.primary,
-  },
-  roleChipTextActive: {
-    color: Colors.white,
   },
   // Button
   button: {

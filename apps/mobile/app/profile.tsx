@@ -15,17 +15,19 @@ import { useAuthStore } from '../src/hooks/useStore';
 import { useTranslation } from '../src/hooks/useTranslation';
 import { Colors, FontFamily, Spacing, BorderRadius, Shadow } from '../src/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const { user, role, profile, setProfile, logout } = useAuthStore();
   const { t, isRTL, language, setLanguage } = useTranslation();
   const [fullName, setFullName] = useState(profile?.full_name || '');
   const [phone, setPhone] = useState(profile?.phone || '');
   const [saving, setSaving] = useState(false);
 
-  const initials = (profile?.full_name || user?.email || 'U')[0].toUpperCase();
+  const initials = ((profile?.full_name || user?.email || 'U')[0] ?? 'U').toUpperCase();
 
-  const roleLabel = role === 'driver' ? 'سائق' : role === 'admin' ? 'مدير' : 'طالب';
+  const roleLabel = role === 'driver' ? t('driver') : role === 'admin' ? t('admin') : t('student');
   const roleIcon =
     role === 'driver' ? 'car-outline' : role === 'admin' ? 'shield-outline' : 'school-outline';
 
@@ -33,27 +35,29 @@ export default function ProfileScreen() {
     if (!fullName.trim()) return;
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ full_name: fullName.trim(), phone: phone.trim() })
-        .eq('id', user?.id);
+      // ✅ استخدام RPC بدلاً من direct update
+      // يمر عبر enforce_profile_privileged_fields trigger بشكل صحيح
+      const { error } = await supabase.rpc('update_my_profile', {
+        p_full_name: fullName.trim(),
+        p_phone: phone.trim(),
+      });
 
       if (error) throw error;
       setProfile({ full_name: fullName.trim(), phone: phone.trim() });
-      Alert.alert('✓', 'تم حفظ التغييرات');
+      Alert.alert('✓', t('updated_successfully'));
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'حدث خطأ';
-      Alert.alert('خطأ', msg);
+      const msg = err instanceof Error ? err.message : t('error_generic');
+      Alert.alert(t('error'), msg);
     } finally {
       setSaving(false);
     }
   };
 
   const handleLogout = async () => {
-    Alert.alert('تسجيل الخروج', 'هل تريد تسجيل الخروج؟', [
-      { text: 'إلغاء', style: 'cancel' },
+    Alert.alert(t('logout'), t('are_you_sure'), [
+      { text: t('cancel'), style: 'cancel' },
       {
-        text: 'خروج',
+        text: t('logout'),
         style: 'destructive',
         onPress: async () => {
           await supabase.auth.signOut();
@@ -77,7 +81,7 @@ export default function ProfileScreen() {
         <View style={styles.avatarCircle}>
           <Text style={styles.avatarText}>{initials}</Text>
         </View>
-        <Text style={styles.headerName}>{profile?.full_name || 'المستخدم'}</Text>
+        <Text style={styles.headerName}>{profile?.full_name || t('user')}</Text>
         <View style={styles.roleBadge}>
           <Ionicons name={roleIcon as any} size={13} color={Colors.primary} />
           <Text style={styles.roleBadgeText}>{roleLabel}</Text>
@@ -87,10 +91,10 @@ export default function ProfileScreen() {
 
       {/* Info Form */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>المعلومات الشخصية</Text>
+        <Text style={styles.sectionTitle}>{t('profile')}</Text>
 
         <View style={styles.field}>
-          <Text style={styles.fieldLabel}>الاسم الكامل</Text>
+          <Text style={styles.fieldLabel}>{t('full_name')}</Text>
           <View style={styles.inputWrapper}>
             <Ionicons
               name="person-outline"
@@ -99,10 +103,10 @@ export default function ProfileScreen() {
               style={styles.inputIcon}
             />
             <TextInput
-              style={styles.input}
+              style={[styles.input, { textAlign: isRTL ? 'right' : 'left' }]}
               value={fullName}
               onChangeText={setFullName}
-              placeholder="أدخل اسمك الكامل"
+              placeholder={t('enter_full_name')}
               placeholderTextColor={Colors.textMuted}
               autoCapitalize="words"
             />
@@ -110,7 +114,7 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.fieldLabel}>رقم الهاتف</Text>
+          <Text style={styles.fieldLabel}>{t('phone')}</Text>
           <View style={styles.inputWrapper}>
             <Ionicons
               name="call-outline"
@@ -119,7 +123,7 @@ export default function ProfileScreen() {
               style={styles.inputIcon}
             />
             <TextInput
-              style={styles.input}
+              style={[styles.input, { textAlign: isRTL ? 'right' : 'left' }]}
               value={phone}
               onChangeText={setPhone}
               placeholder="+964 7XX XXX XXXX"
@@ -130,7 +134,7 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.fieldLabel}>البريد الإلكتروني</Text>
+          <Text style={styles.fieldLabel}>{t('email')}</Text>
           <View style={[styles.inputWrapper, styles.inputDisabled]}>
             <Ionicons
               name="mail-outline"
@@ -139,7 +143,7 @@ export default function ProfileScreen() {
               style={styles.inputIcon}
             />
             <TextInput
-              style={[styles.input, { color: Colors.textMuted }]}
+              style={[styles.input, { color: Colors.textMuted }, { textAlign: isRTL ? 'right' : 'left' }]}
               value={user?.email || ''}
               editable={false}
             />
@@ -158,19 +162,40 @@ export default function ProfileScreen() {
           ) : (
             <>
               <Ionicons name="checkmark-outline" size={18} color={Colors.white} />
-              <Text style={styles.saveButtonText}>حفظ التغييرات</Text>
+              <Text style={styles.saveButtonText}>{t('save')}</Text>
             </>
           )}
         </TouchableOpacity>
       </View>
 
+      {/* History */}
+      {role === 'student' && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('trip_history')}</Text>
+          <TouchableOpacity
+            style={styles.historyButton}
+            onPress={() => router.push('/history')}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="time-outline" size={20} color={Colors.primary} />
+            <Text style={styles.historyButtonText}>{t('trip_history')}</Text>
+            <Ionicons
+              name={isRTL ? 'chevron-back' : 'chevron-forward'}
+              size={20}
+              color={Colors.textMuted}
+              style={styles.chevronIcon}
+            />
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Language */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>اللغة</Text>
+        <Text style={styles.sectionTitle}>{t('language')}</Text>
         <View style={styles.langRow}>
           {[
-            { code: 'ar', label: 'العربية' },
-            { code: 'en', label: 'English' },
+            { code: 'ar', label: t('arabic') },
+            { code: 'en', label: t('english') },
           ].map((lang) => (
             <TouchableOpacity
               key={lang.code}
@@ -190,7 +215,7 @@ export default function ProfileScreen() {
       {/* Logout */}
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.85}>
         <Ionicons name="log-out-outline" size={18} color={Colors.error} />
-        <Text style={styles.logoutText}>تسجيل الخروج</Text>
+        <Text style={styles.logoutText}>{t('logout')}</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -318,6 +343,27 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.bold,
     fontSize: 15,
     color: Colors.white,
+  },
+  // History
+  historyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceMuted,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  historyButtonText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 15,
+    color: Colors.text,
+    marginLeft: Spacing.sm,
+    flex: 1,
+    textAlign: 'left',
+  },
+  chevronIcon: {
+    transform: [{ scaleX: -1 }], // For RTL
   },
   // Language
   langRow: {

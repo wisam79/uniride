@@ -1,985 +1,576 @@
-# UniRide v2 — منصة النقل الذكي للجامعة
+# UniRide v3 — المرجع الشامل
 
-## التوثيق الهندسي الشامل
+> **الإصدار:** v3.0.0 | **آخر تحديث:** 2026-05-12 | **الاختبارات:** 123/123 ✅
 
 ---
 
-## الفهرس (Table of Contents)
+## الفهرس
 
-1. [نظرة عامة على المشروع](#1-نظرة-عامة-على-المشروع)
+1. [نظرة عامة](#1-نظرة-عامة)
 2. [البنية المعمارية](#2-البنية-المعمارية)
-3. [قاعدة البيانات والمخطط](#3-قاعدة-البيانات-والمخطط)
-4. [آليات الأمان والتحكم بالوصول](#4-آليات-الأمان-والتحكم-بالوصول)
-5. [الوظائف الحدية (Edge Functions)](#5-الوظائف-الحدية-edge-functions)
-6. [إدارة الحالة وحالة عدم الاتصال](#6-إدارة-الحالة-وحالة-عدم-الاتصال)
-7. [خطوط الأنابيب (CI/CD)](#7-خطوط-الأنابيب-cicd)
-8. [دليل العمليات والمسار التقني](#8-دليل-العمليات-والمسار-التقني)
-9. [هيكل المشروع والملفات الرئيسية](#9-هيكل-المشروع-والملفات-الرئيسية)
+3. [قاعدة البيانات](#3-قاعدة-البيانات)
+4. [الأمان](#4-الأمان)
+5. [Edge Functions](#5-edge-functions)
+6. [State Machine](#6-state-machine)
+7. [إدارة الحالة والـ Offline](#7-إدارة-الحالة-والـ-offline)
+8. [لوحة التحكم](#8-لوحة-التحكم)
+9. [التطبيق المحمول](#9-التطبيق-المحمول)
+10. [CI/CD](#10-cicd)
+11. [الأوامر المرجعية](#11-الأوامر-المرجعية)
 
 ---
 
-## 1. نظرة عامة على المشروع
+## 1. نظرة عامة
 
-### 1.1 التعريف
+### 1.1 ما هو UniRide؟
 
-**UniRide** هو منصة نقل ذكي للطلاب الجامعيين في العراق. تعمل على ربط الطلاب بالسائقين عبر نظام حجز المقاعد المتزامن مع تتبع GPS الحي للحافلات.
+منصة نقل ذكي للطلاب الجامعيين في العراق. تربط الطلاب بالسائقين عبر:
 
-### 1.2 الحزم والتقنيات
+- **نظام تراخيص مدفوعة مسبقاً** — بدلاً من الحجز المباشر
+- **تتبع GPS حي** — مع دعم offline
+- **إشعارات فورية** — عبر Expo Push API
+- **Feature Flags** — تفعيل/تعطيل الميزات بدون نشر
 
-| الحزمة      | التقنية                           | الإصدار                         |
-| ----------- | --------------------------------- | ------------------------------- |
-| **Root**    | pnpm workspaces                   | 10.0.0                          |
-| **Admin**   | Next.js + React + MUI + Refine    | Next.js 16.2.6, React 19        |
-| **Mobile**  | Expo + React Native + Expo Router | Expo 54, RN 0.81.5              |
-| **Core**    | Zod schemas, i18n                 | TypeScript 5.4.5                |
-| **DB**      | Drizzle ORM + Supabase PostgreSQL | -                               |
-| **Testing** | Vitest (unit) + Playwright (E2E)  | Vitest 1.6.0, Playwright 1.59.1 |
+### 1.2 أدوار المستخدمين
 
-### 1.3 أدوار المستخدمين
+| الدور     | الصلاحيات                                           |
+| --------- | --------------------------------------------------- |
+| `admin`   | لوحة تحكم كاملة، إدارة جميع الكيانات، Feature Flags |
+| `student` | تفعيل ترخيص، تتبع الرحلة، تقييم السائق              |
+| `driver`  | إنشاء رحلة، تحديث الحالة، إرسال GPS                 |
 
-| الدور       | الوصف        | الصلاحيات                                     |
-| ----------- | ------------ | --------------------------------------------- |
-| **admin**   | مدير النظام  | لوحة تحكم كاملة، إدارة جميع الكيانات          |
-| **student** | طالب جامعي   | حجز المقاعد، عرض الاشتراكات، تتبع الرحلة      |
-| **driver**  | سائق الحافلة | بدء/إنهاء الرحلات، إرسال موقع GPS، عرض الركاب |
+### 1.3 التقنيات
 
-### 1.4 حالات الرحلة (Trip State Machine)
-
-```
-scheduled ──────► driver_waiting ──────► in_transit ──────► completed
-    │                   │                     │
-    ▼                   ▼                     ▼
-cancelled           cancelled             absent
-```
-
-الانتقالات المسموحة:
-
-- `scheduled` → `driver_waiting`, `cancelled`
-- `driver_waiting` → `in_transit`, `cancelled`
-- `in_transit` → `completed`, `absent`
-- `completed`, `absent`, `cancelled` → (نهاية، لا انتقالات)
+| الطبقة    | التقنية                        |
+| --------- | ------------------------------ |
+| Admin     | Next.js 16.2.6 + Refine + MUI  |
+| Mobile    | Expo 54 + React Native         |
+| Core      | TypeScript 5.4.5 + Zod         |
+| Database  | Supabase PostgreSQL            |
+| Functions | Deno (Supabase Edge Functions) |
+| Testing   | Vitest + Playwright            |
 
 ---
 
 ## 2. البنية المعمارية
 
-### 2.1 بنية المجلدات (Monorepo)
+### 2.1 هيكل Monorepo
 
 ```
 uniride/
-├── apps/
-│   ├── admin/                    # لوحة تحكم administrators
-│   │   ├── src/
-│   │   │   ├── app/             # App Router pages
-│   │   │   ├── components/      # مكونات MUI
-│   │   │   ├── providers/       # AuthProvider, SupabaseClient
-│   │   │   └── refine/          # إعدادات Refine resources
-│   │   ├── package.json
-│   │   └── ...
-│   └── mobile/                  # تطبيق React Native
-│       ├── src/
-│       │   ├── app/            # Expo Router screens
-│       │   ├── hooks/          # useTrips, useRoutes, useNetworkStatus
-│       │   ├── lib/            # supabase client
-│       │   └── stores/         # Zustand stores
-│       └── ...
-├── packages/
-│   ├── core/                    # schemas, i18n, theme
-│   │   └── index.ts            # UserRole, TripStatus, Translations...
-│   └── db/                     # Drizzle ORM schema + seed
-│       ├── schema/             # جداول قاعدة البيانات
-│       ├── migrations/        # Drizzle snapshots
-│       └── drizzle.config.ts
-├── supabase/
-│   ├── functions/             # Edge Functions (Deno)
-│   │   ├── trip-engine/       # تحديث حالة الرحلة + GPS
-│   │   └── atomic-booking/    # حجز المقعد الذري
-│   └── migrations/            # SQL migrations (المصدر الحقيقي للإنتاج)
-│       ├── 2026051004_phase0_fixes.sql
-│       └── 2026051005_critical_fixes.sql
-├── .github/workflows/         # CI/CD pipelines
-│   ├── ci.yml                 # lint, typecheck, tests, build
-│   ├── deploy.yml             # migrations + edge functions
-│   ├── e2e.yml                # Playwright API tests
-│   ├── pr-check.yml           # PR validation
-│   ├── security.yml           # pnpm audit + SQL review
-│   └── setup-branch-protection.yml
-├── tests/                      # اختبارات Playwright
-├── docs/v2/                   # توثيق إضافي
-└── package.json               # pnpm workspace root
+├── apps/admin/          ← Next.js لوحة التحكم
+├── apps/mobile/         ← Expo تطبيق الطلاب/السائقين
+├── packages/core/       ← Zod schemas, state machine, i18n
+└── supabase/            ← Edge Functions + SQL Migrations
 ```
 
-### 2.2 نمط تدفق البيانات
+### 2.2 تدفق البيانات
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        طلب HTTP                                 │
-│                  (Edge Function / REST)                         │
-└─────────────────────────┬───────────────────────────────────────┘
-                          ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                  Supabase Auth (JWT)                            │
-│            ── التحقق من token + استخراج user.id ──             │
-└─────────────────────────┬───────────────────────────────────────┘
-                          ▼
-┌─────────────────────────────────────────────────────────────────┐
-│           Row Level Security (RLS)                              │
-│    ── تطبيقPolicies على مستوى الصفوف في PostgreSQL ──         │
-└─────────────────────────┬───────────────────────────────────────┘
-                          ▼
-┌─────────────────────────────────────────────────────────────────┐
-│           PostgreSQL Functions (RPCs)                           │
-│  ── reserve_seat(), update_trip_status(), check_rate_limit() ── │
-└─────────────────────────┬───────────────────────────────────────┘
-                          ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                     النتيجة                                     │
-│              (JSON Response / Subscription)                      │
-└─────────────────────────────────────────────────────────────────┘
+Client Request
+    ↓
+Supabase Auth (JWT verification)
+    ↓
+app_metadata.role (لا user_metadata)
+    ↓
+Row Level Security (RLS)
+    ↓
+PostgreSQL RPC / Table
+    ↓
+JSON Response
 ```
 
-### 2.3 الفرق بين Drizzle و Supabase Migrations
+### 2.3 قرارات التصميم الرئيسية
 
-| النظام                  | الغرض                          | المصدر؟                   |
-| ----------------------- | ------------------------------ | ------------------------- |
-| **Drizzle Kit**         | توليد Typescript types محلي    | تطوير فقط                 |
-| **Supabase Migrations** | التطبيق الحقيقي على production | **المصدر الوحيد للحقيقة** |
+**لماذا نظام التراخيص؟**
 
-> **مهم:** لا يتم رفع migraitons Drizzle إلى production. فقط `supabase/migrations/*.sql` هي التي تُنشر.
+- لا حاجة لبوابة دفع في المرحلة الأولى
+- `FOR UPDATE NOWAIT` يمنع استخدام نفس الكود مرتين
+- Admin يتحكم في التوزيع خارج النظام
+
+**لماذا `app_metadata` وليس `user_metadata`؟**
+
+- `user_metadata` قابل للتعديل من العميل → ثغرة Privilege Escalation
+- `app_metadata` يكتبها Service Role فقط → آمن
+
+**لماذا DB-backed Rate Limiting؟**
+
+- Deno cold starts تمسح `Map()` في الذاكرة
+- `rate_limits` table يبقى بين cold starts
 
 ---
 
-## 3. قاعدة البيانات والمخطط
+## 3. قاعدة البيانات
 
-### 3.1 جداول قاعدة البيانات
+### 3.1 الجداول
 
-#### `profiles` — ملفات المستخدمين
+#### `profiles`
 
 ```sql
 id              UUID PRIMARY KEY (FK auth.users)
 full_name       TEXT NOT NULL
 phone           TEXT NOT NULL
-role            TEXT NOT NULL CHECK (role IN ('admin','student','driver'))
-institution_id  UUID NULL
-created_at      TIMESTAMPTZ DEFAULT NOW()
-updated_at      TIMESTAMPTZ DEFAULT NOW()
+role            TEXT CHECK (role IN ('admin','student','driver'))
+institution_id  UUID NULL (FK institutions.id)
+is_verified     BOOLEAN DEFAULT false
+created_at      TIMESTAMPTZ
+updated_at      TIMESTAMPTZ
 ```
 
-#### `drivers` — بيانات السائقين والمركبات
+#### `drivers`
 
 ```sql
-id              UUID PRIMARY KEY DEFAULT gen_random_uuid()
-user_id         UUID NOT NULL UNIQUE (FK profiles.id)
+id              UUID PRIMARY KEY
+user_id         UUID UNIQUE (FK profiles.id)
 license_number  TEXT NOT NULL
 vehicle_model   TEXT NOT NULL
 vehicle_plate   TEXT NOT NULL
-capacity        INT NOT NULL DEFAULT 40
-created_at      TIMESTAMPTZ DEFAULT NOW()
+capacity        INT DEFAULT 40
+is_verified     BOOLEAN DEFAULT false
+created_at      TIMESTAMPTZ
 ```
 
-#### `routes` — خطوط النقل
+#### `routes`
 
 ```sql
-id              UUID PRIMARY KEY DEFAULT gen_random_uuid()
-driver_id       UUID NOT NULL (FK drivers.id)
+id              UUID PRIMARY KEY
+driver_id       UUID (FK drivers.id)  ← drivers.id وليس auth.uid()
+institution_id  UUID NULL (FK institutions.id)
 title           TEXT NOT NULL
 start_location  TEXT NOT NULL
 end_location    TEXT NOT NULL
-price           BIGINT NOT NULL  -- بالدينار العراقي
+price           BIGINT NOT NULL  ← بالدينار العراقي
 capacity        INT NOT NULL
-available_seats INT NOT NULL
+available_seats INT NOT NULL CHECK (available_seats >= 0)
 is_active       BOOLEAN DEFAULT true
-created_at      TIMESTAMPTZ DEFAULT NOW()
-updated_at      TIMESTAMPTZ DEFAULT NOW()
+start_lat/lng   NUMERIC NULL
+end_lat/lng     NUMERIC NULL
+departure_time  TIME NULL
+return_time     TIME NULL
 ```
 
-#### `subscriptions` — اشتراكات الطلاب
+#### `subscriptions`
 
 ```sql
-id              UUID PRIMARY KEY DEFAULT gen_random_uuid()
-student_id      UUID NOT NULL (FK profiles.id)
-route_id        UUID NOT NULL (FK routes.id)
-status          TEXT NOT NULL CHECK (status IN ('pending','active','expired','cancelled'))
+id              UUID PRIMARY KEY
+student_id      UUID (FK profiles.id)
+route_id        UUID (FK routes.id)
+status          TEXT CHECK (status IN ('pending','active','expired','cancelled'))
 start_date      DATE NOT NULL
 end_date        DATE NOT NULL
-created_at      TIMESTAMPTZ DEFAULT NOW()
+created_at      TIMESTAMPTZ
+updated_at      TIMESTAMPTZ
 ```
 
-#### `trips` — رحلات فعلية
+#### `trips`
 
 ```sql
-id              UUID PRIMARY KEY DEFAULT gen_random_uuid()
-route_id        UUID NOT NULL (FK routes.id)
-driver_id       UUID NOT NULL (FK drivers.id)
-status          TEXT NOT NULL DEFAULT 'scheduled'
+id              UUID PRIMARY KEY
+route_id        UUID (FK routes.id)
+driver_id       UUID (FK drivers.id)  ← drivers.id وليس auth.uid()
+status          TEXT DEFAULT 'scheduled'
 scheduled_at    TIMESTAMPTZ NOT NULL
 started_at      TIMESTAMPTZ NULL
 ended_at        TIMESTAMPTZ NULL
 last_lat        NUMERIC(10,7) NULL
 last_lng        NUMERIC(10,7) NULL
-created_at      TIMESTAMPTZ DEFAULT NOW()
-updated_at      TIMESTAMPTZ DEFAULT NOW()
+created_at      TIMESTAMPTZ
+updated_at      TIMESTAMPTZ
 ```
 
-#### `audit_logs` — سجل المراجعة
+#### `licenses`
 
 ```sql
-id              UUID PRIMARY KEY DEFAULT gen_random_uuid()
-user_id         UUID NOT NULL (FK auth.users)
+id              UUID PRIMARY KEY
+batch_id        UUID (FK license_batches.id)
+route_id        UUID (FK routes.id)
+code            TEXT UNIQUE NOT NULL  ← 8 أحرف عشوائية
+status          TEXT CHECK (status IN ('active','used','revoked'))
+used_by         UUID NULL (FK profiles.id)
+used_at         TIMESTAMPTZ NULL
+valid_days      INT NOT NULL
+created_at      TIMESTAMPTZ
+```
+
+#### `license_batches`
+
+```sql
+id              UUID PRIMARY KEY
+created_by      UUID (FK profiles.id)
+route_id        UUID (FK routes.id)
+batch_name      TEXT NOT NULL
+quantity        INT NOT NULL
+price           NUMERIC NOT NULL
+valid_days      INT NOT NULL
+created_at      TIMESTAMPTZ
+```
+
+#### `ratings`
+
+```sql
+id              UUID PRIMARY KEY
+trip_id         UUID (FK trips.id)
+student_id      UUID (FK profiles.id)
+driver_id       UUID (FK auth.users.id)  ← auth.users.id وليس drivers.id
+rating          INT CHECK (rating BETWEEN 1 AND 5)
+comment         TEXT NULL
+created_at      TIMESTAMPTZ
+UNIQUE(trip_id, student_id)
+```
+
+#### `institutions`
+
+```sql
+id              UUID PRIMARY KEY
+name            TEXT NOT NULL
+city            TEXT NULL
+created_at      TIMESTAMPTZ
+```
+
+#### `feature_flags`
+
+```sql
+id              UUID PRIMARY KEY
+name            TEXT UNIQUE NOT NULL
+enabled         BOOLEAN DEFAULT false
+description     TEXT NULL
+created_at      TIMESTAMPTZ
+updated_at      TIMESTAMPTZ
+```
+
+#### `push_tokens`
+
+```sql
+id              UUID PRIMARY KEY
+user_id         UUID (FK auth.users.id)
+token           TEXT NOT NULL
+created_at      TIMESTAMPTZ
+updated_at      TIMESTAMPTZ
+```
+
+#### `rate_limits`
+
+```sql
+id              UUID PRIMARY KEY
+user_id         UUID (FK auth.users.id)
+action          TEXT NOT NULL
+window_start    TIMESTAMPTZ DEFAULT NOW()
+request_count   INT DEFAULT 1
+```
+
+#### `audit_logs`
+
+```sql
+id              UUID PRIMARY KEY
+user_id         UUID (FK auth.users.id)
 action          TEXT NOT NULL
 resource        TEXT NOT NULL
 resource_id     UUID NULL
 details         JSONB NULL
-created_at      TIMESTAMPTZ DEFAULT NOW()
+created_at      TIMESTAMPTZ
 ```
 
-#### `rate_limits` — التحكم في معدل الطلبات
+### 3.2 العلاقات المهمة
+
+```
+⚠️ trips.driver_id → drivers.id (وليس auth.uid())
+⚠️ routes.driver_id → drivers.id (وليس auth.uid())
+⚠️ ratings.driver_id → auth.users.id (وليس drivers.id)
+```
+
+هذا التمييز مهم جداً — `drivers.id` ≠ `auth.uid()`.
+
+### 3.3 الـ Triggers
+
+| Trigger                             | الجدول     | الوظيفة                                  |
+| ----------------------------------- | ---------- | ---------------------------------------- |
+| `set_trips_updated_at`              | trips      | تحديث updated_at تلقائياً                |
+| `on_auth_user_created`              | auth.users | إنشاء profile تلقائياً عند التسجيل       |
+| `enforce_profile_privileged_fields` | profiles   | يمنع تغيير role/is_verified إلا من admin |
+
+### 3.4 pg_cron Jobs
 
 ```sql
-id              UUID PRIMARY KEY DEFAULT gen_random_uuid()
-user_id         UUID NOT NULL (FK auth.users)
-action          TEXT NOT NULL
-window_start    TIMESTAMPTZ NOT NULL DEFAULT NOW()
-request_count   INT NOT NULL DEFAULT 1
-created_at      TIMESTAMPTZ DEFAULT NOW()
-```
-
-### 3.2 العلاقات بين الجداول
-
-```
-auth.users
-    │
-    └── profiles (1:1)
-            │
-            ├── drivers (1:1) ────── routes (1:M) ────── subscriptions (M:1) ──── profiles (students)
-            │       │
-            │       └── trips (1:M)
-            │
-            └── subscriptions (1:M) (كمسافر)
-```
-
-### 3.3 الدوال المخزنة (Stored Procedures / RPCs)
-
-| الدالة                                                         | الغرض                                               | معلجات             |
-| -------------------------------------------------------------- | --------------------------------------------------- | ------------------ |
-| `reserve_seat(route_id, student_id)`                           | حجز مقعد بشكل ذري باستخدام `FOR UPDATE` lock        | تمنع الحجز المزدوج |
-| `update_trip_status(trip_id, new_status, lat, lng, driver_id)` | تحديث حالة الرحلة مع التحقق من state machine        | يحمي transitions   |
-| `update_trip_location(trip_id, lat, lng)`                      | تحديث موقع GPS فقط                                  | لا يغير الحالة     |
-| `get_dashboard_stats()`                                        | إحصائيات للوحة التحكم (بدلاً من تحميل كل البيانات)  | تُرجع JSON         |
-| `check_rate_limit(action, limit, window_seconds)`              | تحديد معدل الطلبات لكل مستخدم                       | DB-backed          |
-| `ping()`                                                       | فحص الاتصال بالشبكة                                 | تُرجع TRUE دائماً  |
-| `get_my_role()`                                                | إرجاع role من `app_metadata` (وليس `user_metadata`) | آمن                |
-| `log_audit(...)`                                               | تسجيل فعل في audit_logs                             | للتتبع             |
-
-### 3.4 الـ Triggers
-
-| Trigger                  | الجدول          | الوظيفة                                         |
-| ------------------------ | --------------- | ----------------------------------------------- |
-| `set_trips_updated_at`   | `trips`         | تحديث `updated_at` تلقائياً عند أي تغيير        |
-| `on_subscription_cancel` | `subscriptions` | إعادة المقاعد المتاحة للخط عند الإلغاء/الانتهاء |
-| `on_profile_update`      | `profiles`      | مزامنة الاسم إلى auth metadata                  |
-
-### 3.5 الفهارس (Indexes)
-
-```sql
-idx_profiles_role          ON profiles(role)
-idx_profiles_institution   ON profiles(institution_id)
-idx_subscriptions_route_status ON subscriptions(route_id, status)
-idx_trips_route_status     ON trips(route_id, status)
-idx_trips_scheduled        ON trips(scheduled_at)
-idx_trips_driver_status    ON trips(driver_id, status)
-idx_audit_logs_resource    ON audit_logs(resource, resource_id)
-idx_audit_logs_user        ON audit_logs(user_id, created_at DESC)
-idx_rate_limits_user_action ON rate_limits(user_id, action, window_start)
-```
-
-### 3.6 pg_cron — المهام المجدولة
-
-```sql
--- job: expire_subscriptions
--- frequency: hourly
--- الوظيفة: تحديث حالة الاشتراكات المنتهية ('active' → 'expired')
+-- كل ساعة: تنظيف rate_limits القديمة
+SELECT cron.schedule('cleanup-rate-limits', '0 * * * *',
+  'SELECT cleanup_rate_limits()');
 ```
 
 ---
 
-## 4. آليات الأمان والتحكم بالوصول
+## 4. الأمان
 
-### 4.1 طبقات الأمان
-
-```
-الطبقة 1: Supabase Auth (JWT tokens)
-الطبقة 2: Row Level Security (RLS) على كل الجداول
-الطبقة 3: app_metadata.role (وليس user_metadata)
-الطبقة 4: Edge Function Auth Verification
-الطبقة 5: Rate Limiting (DB-backed)
-الطبقة 6: Input Validation (Zod schemas)
-```
-
-### 4.2 الـ JWT Claims المستخدمة
+### 4.1 JWT Claims
 
 ```typescript
-// من auth.users.app_metadata
-{
-  "role": "admin" | "student" | "driver"
-}
+// الدور من app_metadata فقط
+const role = user.app_metadata?.role; // 'admin' | 'student' | 'driver'
 
-// من auth.jwt()
-auth.uid()          // UUID المستخدم الحالي
-auth.jwt() -> 'app_metadata' ->> 'role'  // الدور
+// في SQL
+auth.jwt() -> 'app_metadata' ->> 'role'
+auth.uid()  // UUID المستخدم
 ```
 
-### 4.3 الفرق بين `app_metadata` و `user_metadata`
-
-| الخاصية       | `app_metadata`          | `user_metadata`         |
-| ------------- | ----------------------- | ----------------------- |
-| **الكتابة**   | admin-only (خادم)       | client-writable         |
-| **الأمان**    | ✅ آمن للدور والصلاحيات | ❌ غير آمن              |
-| **الاستخدام** | `authProvider.ts`       | ❌ لا تستخدمه للصلاحيات |
-
-> **تحذير:** استخدام `user_metadata.role` للصلاحيات = ثغرة ارتفاع صلاحيات (Privilege Escalation)
-> لأن أي مستخدم يمكنه تغيير `user_metadata` من العميل.
-
-### 4.4 سياسات RLS الرئيسية
+### 4.2 RLS الرئيسية
 
 ```sql
--- profiles: المستخدم يرى ملفه فقط، admin يرى الكل
-CREATE POLICY "Users can view own profile" ON profiles
-  FOR SELECT USING (auth.uid() = id);
-
-CREATE POLICY "Admins can view all profiles" ON profiles
-  FOR SELECT USING (get_my_role() = 'admin');
-
--- routes: السائق يرى خطوطه، admin يرى الكل
-CREATE POLICY "Drivers can view own routes" ON routes
-  FOR SELECT USING (
-    auth.uid() IN (SELECT user_id FROM drivers WHERE id = driver_id)
-    OR get_my_role() = 'admin'
-  );
-
+-- profiles: المستخدم يرى ملفه، admin يرى الكل
 -- subscriptions: الطالب يرى اشتراكاته فقط
-CREATE POLICY "Students can view own subscriptions" ON subscriptions
-  FOR SELECT USING (auth.uid() = student_id);
+-- trips: السائق يرى رحلاته، admin يرى الكل
+-- feature_flags: الكل يقرأ، admin فقط يعدّل
+-- rate_limits: لا وصول مباشر (DENY ALL)
 ```
 
-### 4.5 التحكم في التزامنية (Concurrency)
-
-**المشكلة:** ماذا يحدث إذا حجز طالبان نفس المقعد في نفس اللحظة؟
-
-**الحل:** `FOR UPDATE` Pessimistic Locking
+### 4.3 التزامنية
 
 ```sql
-CREATE OR REPLACE FUNCTION reserve_seat(p_route_id UUID, p_student_id UUID) RETURNS UUID AS $$
-DECLARE
-  v_available INT;
-  v_existing UUID;
-  v_sub_id UUID;
-BEGIN
-  -- قفل الصف preventing concurrent modifications
-  SELECT available_seats INTO v_available
-  FROM routes
-  WHERE id = p_route_id
-  FOR UPDATE;
-
-  -- فحص المقاعد المتاحة
-  IF v_available <= 0 THEN
-    RAISE EXCEPTION 'No seats available';
-  END IF;
-
-  -- فحص الاشتراك الحالي
-  SELECT id INTO v_existing
-  FROM subscriptions
-  WHERE student_id = p_student_id AND route_id = p_route_id AND status = 'active';
-
-  IF v_existing IS NOT NULL THEN
-    RAISE EXCEPTION 'Already subscribed to this route';
-  END IF;
-
-  -- خصم المقعد
-  UPDATE routes SET available_seats = available_seats - 1 WHERE id = p_route_id;
-
-  -- إنشاء الاشتراك
-  INSERT INTO subscriptions (student_id, route_id, status, start_date, end_date)
-  VALUES (p_student_id, p_route_id, 'active', CURRENT_DATE, CURRENT_DATE + INTERVAL '30 days')
-  RETURNING id INTO v_sub_id;
-
-  RETURN v_sub_id;
-END;
-$$ LANGUAGE plpgsql;
+-- activate_license: FOR UPDATE NOWAIT
+-- cancel_subscription: FOR UPDATE
+-- لا race conditions في العمليات الحساسة
 ```
 
-### 4.6 Rate Limiting (تحديد معدل الطلبات)
+### 4.4 Rate Limiting
 
-**المشكلة:** Deno cold start يمسح `Map()` في الذاكرة.
-
-**الحل:** DB-backed rate limiting
-
-```sql
-CREATE TABLE rate_limits (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES auth.users(id),
-  action TEXT NOT NULL,
-  window_start TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  request_count INT NOT NULL DEFAULT 1
-);
-
-CREATE OR REPLACE FUNCTION check_rate_limit(
-  p_action TEXT, p_limit INT, p_window_seconds INT
-) RETURNS BOOLEAN AS $$
-DECLARE v_count INT; v_window_start TIMESTAMPTZ;
-BEGIN
-  v_window_start := NOW() - (p_window_seconds || ' seconds')::INTERVAL;
-  DELETE FROM rate_limits WHERE user_id = auth.uid() AND action = p_action AND window_start < v_window_start;
-  SELECT COALESCE(SUM(request_count), 0) INTO v_count FROM rate_limits
-  WHERE user_id = auth.uid() AND action = p_action AND window_start >= v_window_start;
-  IF v_count >= p_limit THEN RETURN FALSE; END IF;
-  INSERT INTO rate_limits (user_id, action, window_start, request_count)
-  VALUES (auth.uid(), p_action, NOW(), 1);
-  RETURN TRUE;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
+trip-engine: 30 طلب / 60 ثانية
 ```
 
-**الحدود:**
+### 4.5 Idempotency
 
-- `trip-engine`: 30 طلب / 60 ثانية
-- `atomic-booking`: 10 طلب / 60 ثانية
+```
+trip-engine يدعم idempotency-key header
+يتحقق من audit_logs قبل التنفيذ
+```
 
-### 4.7 الـ Idempotency
+---
 
-**المشكلة:** إعادة إرسال نفس الطلب (network retry) قد تنفذ العملية مرتين.
+## 5. Edge Functions
 
-**الحل:** `idempotency-key` header
+### `trip-engine` (v6)
+
+- **الغرض:** تحديث حالة الرحلة
+- **الأمان:** JWT + Rate Limit + Idempotency + CORS
+- **CORS:** ADMIN_URL + Expo origins فقط
+
+### `send-notification` (v4)
+
+- **الغرض:** Push notifications عبر Expo
+- **الجديد:** Multi-device support + CORS hardening
+- **القيود:** admin/driver فقط، driver محدود بطلابه
+
+### `zaincash-checkout` / `zaincash-webhook`
+
+- **الحالة:** Stubs — تحتاج credentials
+
+---
+
+## 6. State Machine
+
+### Trip Transitions
+
+```
+scheduled → driver_waiting → in_transit → completed
+    ↓              ↓              ↓
+cancelled      cancelled       absent
+```
+
+### Subscription Transitions
+
+```
+pending → active → expired
+   ↓         ↓
+cancelled  cancelled
+```
+
+### License Transitions
+
+```
+active → used
+   ↓
+revoked
+```
+
+---
+
+## 7. إدارة الحالة والـ Offline
+
+### Zustand Stores (Mobile)
 
 ```typescript
-// في Edge Function
-const idempotencyKey = req.headers.get('idempotency-key');
+useAuthStore; // user, role, profile, institution_id
+useTripStore; // activeTripId, currentStatus
+useBookingStore; // isBooking, idempotencyKey
+useI18nStore; // language (ar/en)
+```
 
-if (idempotencyKey) {
-  const { data: existingAudit } = await supabase
-    .from('audit_logs')
-    .select('id')
-    .eq('user_id', user.id)
-    .eq('action', 'trip_status_change')
-    .eq('resource_id', tripId)
-    .eq('details', JSON.stringify({ idempotencyKey }))
-    .single();
+### GPS Offline Queue
 
-  if (existingAudit) {
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: 'Status already updated (idempotent response)',
-        idempotent: true,
-      }),
-      { status: 200, headers },
-    );
+```
+[متصل]     → update_trip_location() RPC مباشرة
+[غير متصل] → AsyncStorage (gps_offline_queue)
+             → flush بعد 5 ثوانٍ من عودة الاتصال
+             → max 3 retries لكل item
+             → validation: lat ∈ [-90,90], lng ∈ [-180,180]
+```
+
+### Subscription Offline Cache
+
+```typescript
+// يُحفظ في AsyncStorage عند كل fetch
+await OfflineCache.saveActiveSubscription(activeSub);
+
+// يُقرأ عند انقطاع الاتصال
+const sub = await OfflineCache.getActiveSubscription();
+// يتحقق من end_date تلقائياً
+```
+
+### Feature Flags Cache
+
+```typescript
+// module-level cache
+let cachedFlags: Record<string, boolean> | null = null;
+
+// يُمسح عند logout
+useEffect(() => {
+  if (!user) {
+    cachedFlags = null;
   }
-}
+}, [user]);
 ```
 
 ---
 
-## 5. الوظائف الحدية (Edge Functions)
+## 8. لوحة التحكم
 
-### 5.1 `trip-engine` — محرك الرحلة
+### الصفحات
 
-**Endpoint:** `/functions/v1/trip-engine`
+| الصفحة             | الميزات                                    |
+| ------------------ | ------------------------------------------ |
+| `/` Dashboard      | إحصائيات، auto-refresh 30s، زر refresh     |
+| `/trips`           | جدول الرحلات، فلتر الحالة، إلغاء يدوي      |
+| `/subscriptions`   | جدول الاشتراكات، أسماء بدلاً من UUIDs      |
+| `/drivers`         | بيانات المركبة الكاملة، toggle is_verified |
+| `/routes`          | الخطوط، اسم السائق                         |
+| `/licenses`        | فلتر status + batch + quick search         |
+| `/license_batches` | إنشاء دفعات عبر create_license_batch()     |
+| `/institutions`    | CRUD المؤسسات                              |
+| `/analytics`       | Date Range Picker، KPIs، Top Routes        |
+| `/feature-flags`   | Toggle مباشر، Realtime                     |
+| `/profiles`        | عرض المستخدمين، اسم المؤسسة                |
 
-**الوظيفة:** يتعامل مع انتقالات حالات الرحلات للسائقين
-
-```typescript
-// طلب
-{
-  tripId: UUID,
-  newStatus: 'scheduled' | 'driver_waiting' | 'in_transit' | 'completed' | 'absent' | 'cancelled',
-  lat: number,
-  lng: number
-}
-
-// Headers
-Authorization: Bearer <JWT>
-idempotency-key: <unique-key>  // optional
-
-// استجابة
-{ success: true }
-```
-
-**خطوات المعالجة:**
-
-1. التحقق من Authorization header
-2. التحقق من Rate limit (30/60s)
-3. التحقق من أن المستخدم سائق (`drivers` table)
-4. التحقق من idempotency key
-5. استدعاء `update_trip_status()` RPC
-6. تسجيل audit log
-7. إرجاع النتيجة
-
-### 5.2 `atomic-booking` — الحجز الذري
-
-**Endpoint:** `/functions/v1/atomic-booking`
-
-**الوظيفة:** حجز مقعد لطالب بشكل آمن من التزامنية
+### قاعدة DataGrid
 
 ```typescript
-// طلب
+// snake_case دائماً — dataProvider يحوّل تلقائياً
 {
-  routeId: UUID,
-  studentId: UUID  // يجب أن يطابق JWT user.id
-}
-
-// Headers
-Authorization: Bearer <JWT>
-idempotency-key: <unique-key>  // optional
-
-// استجابة
-{ success: true, subscriptionId: UUID }
-```
-
-**خطوات المعالجة:**
-
-1. التحقق من Authorization header
-2. التحقق من Rate limit (10/60s)
-3. التحقق من UUID format
-4. التحقق من أن `studentId === user.id` (لا يمكن الحجز لشخص آخر)
-5. التحقق من idempotency (اشتراك موجود مسبقاً)
-6. استدعاء `reserve_seat()` RPC
-7. تسجيل audit log
-8. إرجاع النتيجة
-
----
-
-## 6. إدارة الحالة وحالة عدم الاتصال
-
-### 6.1 تطبيقات إدارة الحالة
-
-| التطبيق    | الحل                     | التفاصيل                            |
-| ---------- | ------------------------ | ----------------------------------- |
-| **Mobile** | Zustand 5 + AsyncStorage | 4 stores: auth, trip, booking, i18n |
-| **Admin**  | Refine + React Hook Form | Server state via Refine hooks       |
-
-### 6.2 Zustand Stores (Mobile)
-
-```typescript
-// stores/authStore.ts
+  field: 'full_name';
+} // ✅
 {
-  user: User | null,
-  role: 'admin' | 'student' | 'driver' | null,
-  setUser: (user) => void,
-  logout: () => void
-}
-
-// stores/tripStore.ts
-{
-  activeTrips: Trip[],
-  currentTrip: Trip | null,
-  setActiveTrips: (trips) => void,
-  updateTrip: (trip) => void
-}
-
-// stores/bookingStore.ts
-{
-  pendingBooking: { routeId, idempotencyKey } | null,
-  setPendingBooking: (booking) => void,
-  clearPendingBooking: () => void
-}
-
-// stores/i18nStore.ts
-{
-  language: 'ar' | 'en',
-  setLanguage: (lang) => void
-}
-```
-
-### 6.3 التعامل مع عدم الاتصال (Offline GPS Queue)
-
-```
-┌──────────────────┐      GPS update       ┌──────────────────┐
-│   في حالة اتصال  │ ──────────────────►  │  update_trip_     │
-│                  │                       │  location RPC     │
-└──────────────────┘                       └──────────────────┘
-
-┌──────────────────┐      GPS update       ┌──────────────────┐
-│  انقطع الاتصال   │ ──────────────────►  │  AsyncStorage    │
-│                  │                       │  gps_offline_queue│
-└──────────────────┘                       └────────┬─────────┘
-                                                   │ After 5s
-                                                   ▼
-                                          flushGpsQueue()
-                                          (max 3 retries per item)
-```
-
-**الكود:**
-
-```typescript
-const GPS_QUEUE_KEY = 'gps_offline_queue';
-
-async function queueLocationUpdate(tripId: string, lat: number, lng: number) {
-  const item: QueuedLocation = { tripId, lat, lng, timestamp: Date.now(), retries: 0 };
-  const existing = await AsyncStorage.getItem(GPS_QUEUE_KEY);
-  const queue: QueuedLocation[] = existing ? JSON.parse(existing) : [];
-  queue.push(item);
-  await AsyncStorage.setItem(GPS_QUEUE_KEY, JSON.stringify(queue));
-}
-```
-
-### 6.4 فحص حالة الشبكة
-
-**المشكلة:** استعلام عادي قد يفشل بسبب RLS (يكون هناك false negative)
-
-**الحل:** استخدام `ping()` RPC الذي يعمل كـ `SECURITY DEFINER`
-
-```typescript
-// useNetworkStatus.ts — يتحقق كل 30 ثانية
-async function checkNetwork() {
-  try {
-    const { error } = await supabase.rpc('ping');
-    setIsOnline(!error);
-  } catch {
-    setIsOnline(false);
-  }
-}
-```
-
-### 6.5 Realtime Subscriptions
-
-```typescript
-// تتبع الرحلات النشطة
-const channel = supabase
-  .channel('trips-active-realtime')
-  .on(
-    'postgres_changes',
-    {
-      event: '*',
-      schema: 'public',
-      table: 'trips',
-    },
-    (payload) => {
-      // INSERT: أضف للـ list إذا كانت نشطة
-      // UPDATE: حدّث العنصر أو احذفه إذا اكتملت
-      // DELETE: احذف من الـ list
-    },
-  )
-  .subscribe();
+  field: 'fullName';
+} // ❌
 ```
 
 ---
 
-## 7. خطوط الأنابيب (CI/CD)
+## 9. التطبيق المحمول
 
-### 7.1 ملخص Workflows
+### الشاشات
 
-| Workflow                        | Trigger             | الوظيفة                                       |
-| ------------------------------- | ------------------- | --------------------------------------------- |
-| **ci.yml**                      | push/PR main        | lint → typecheck → test → build               |
-| **pr-check.yml**                | PR opened           | التحقق من .env، console.log، تسمية migrations |
-| **deploy.yml**                  | CI success / manual | تطبيق Migrations + نشر Edge Functions         |
-| **e2e.yml**                     | push main / manual  | Playwright API tests                          |
-| **security.yml**                | weekly / manual     | pnpm audit + مراجعة SQL                       |
-| **setup-branch-protection.yml** | manual              | إعداد حماية الفرع                             |
+| الشاشة              | الوصف                                                   |
+| ------------------- | ------------------------------------------------------- |
+| `index.tsx`         | خطوط الجامعة (مفلترة بـ institution_id) + بحث Nominatim |
+| `booking.tsx`       | تفاصيل الخط → redirect لـ activate                      |
+| `activate.tsx`      | إدخال كود 8 أحرف → activate_license()                   |
+| `subscriptions.tsx` | اشتراكاتي + تتبع + cancel_subscription()                |
+| `driver.tsx`        | لوحة السائق + تحديث الحالة عبر trip-engine              |
+| `create-trip.tsx`   | إنشاء رحلة عبر create_trip()                            |
+| `tracking/[tripId]` | خريطة OpenStreetMap + موقع السائق                       |
+| `rating/[tripId]`   | تقييم 1-5 عبر submit_rating()                           |
 
-### 7.2 CI Pipeline (`ci.yml`)
+### Hooks الرئيسية
 
-```
-Push/PR to main
-      │
-      ▼
-┌─────────────────────┐
-│ lint-and-typecheck  │  ──► format --check
-│                     │  ──► pnpm typecheck
-└──────────┬──────────┘
-           │ success
-           ▼
-┌─────────────────────┐
-│    unit-tests       │  ──► vitest --coverage
-│                     │     thresholds: 60% lines, 50% branches/functions
-└──────────┬──────────┘
-           │ success
-           ▼
-┌─────────────────────┐
-│    build-admin      │  ──► Next.js production build
-│                     │     (placeholder env vars)
-└──────────┬──────────┘
-           │ success
-           ▼
-┌─────────────────────┐
-│     ci-success      │  ──► يتحقق من نجاح كل الـ jobs
-└─────────────────────┘
-```
-
-### 7.3 Deploy Pipeline (`deploy.yml`)
-
-```
-CI success
-    │
-    ▼
-┌─────────────────────────────────────────┐
-│  setup-supabase-cli  →  link project   │
-└────────────────────┬───────────────────┘
-                     ▼
-┌────────────────────┐
-│  push migrations   │  ──► supabase db push
-│  (production DB)   │     (تطبيق SQL migrations)
-└────────────────────┬───────────────────┘
-                     ▼
-┌────────────────────────────┐
-│  deploy edge functions     │  ──► deploy trip-engine
-│                            │  ──► deploy atomic-booking
-└────────────────────────────┬────────────────────┘
-                             ▼
-┌────────────────────────────────────────────┐
-│  set secrets                         │
-│  SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY │
-│  ADMIN_URL                                      │
-└────────────────────────────────────────────┘
-                             ▼
-                    Verify Functions Active
-```
-
-### 7.4 PR Check (`pr-check.yml`)
-
-```
-PR opened/synced
-      │
-      ▼
-┌─────────────────┐
-│ .env detection  │  ──► Exit 1 if .env found in diff
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│ console.log     │  ──► Warning only (لا يمنع الـ merge)
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│ Migration naming│  ──► Pattern: YYYYMMDDNN_name.sql
-└────────┬────────┘
-         ▼
-┌─────────────────┐
-│ PR description  │  ──► Exit if < 10 chars
-└─────────────────┘
-```
-
-### 7.5 Branch Protection على `main`
-
-```
-main branch
-     │
-     ├─ Require pull request before merge    ✅
-     ├─ Require at least 1 approval          ✅
-     ├─ Require CI checks to pass            ✅ (ci.yml)
-     ├─ Require linear history              ✅ (rebase only)
-     ├─ Include admin in protection         ✅
-     └─ Block force pushes                  ✅
+```typescript
+useActiveTrips(institutionId); // مفلترة بمؤسسة الطالب
+useDriverTrips(page); // رحلات السائق مع pagination
+useTripTracking(tripId); // Realtime + joins كاملة
+useLocationTracker(); // GPS + offline queue
+useSubscriptions(page); // مع offline fallback
+useRoutes(institutionId, page); // مفلترة + Realtime
+useNetworkStatus(); // ping() كل 30 ثانية
+useFeatureFlags(); // Realtime + cache clear
 ```
 
 ---
 
-## 8. دليل العمليات والمسار التقني
+## 10. CI/CD
 
-### 8.1 كيفية رفع تصحيح (Bug Fix)
-
-```
-1. أنشئ فرع من main:
-   git checkout -b fix/description
-
-2. اكتب الكود وأصلح الـ bug
-
-3. تأكد من:
-   pnpm format --check    // التنسيق
-   pnpm typecheck         // الأنواع
-   pnpm test              // الاختبارات
-
-4. ارفع الفرع واصنع PR:
-   git push -u origin fix/description
-   gh pr create --title "fix: description" --body "..."
-
-5. الـ PR-check يعمل تلقائياً:
-   - يفحص .env
-   - يفحص console.log
-   - يتحقق من تسمية migration
-   - يتحقق من وصف PR
-
-6. بعد الموافقة والـ CI passed:
-   - Squash and merge
-   - deploy.yml يعمل تلقائياً
-
-7. Migration تطبق على Supabase production
-```
-
-### 8.2 كيفية إضافة Migration جديد
+### Workflows
 
 ```
-1. أنشئ ملف جديد في supabase/migrations/
-   Pattern: YYYYMMDDNN_descriptive_name.sql
-
-   مثال: 2026051101_add_new_table.sql
-
-2. اكتب SQL:
-   CREATE TABLE IF NOT EXISTS ...;
-   CREATE POLICY "..." ON ...;
-   CREATE INDEX ...;
-
-3. اختبر محلياً (إن أمكن)
-
-4. ارفع وقم بـ PR
-
-5. بعد merge، deploy.yml يطبق Migration تلقائياً:
-   supabase db push
+ci.yml:     lint → typecheck → vitest → Next.js build
+deploy.yml: supabase db push → deploy 4 functions → set secrets
+e2e.yml:    Playwright API tests
+security.yml: pnpm audit + SQL review (weekly)
 ```
 
-### 8.3 كيفية نشر Edge Function جديد
+### Branch Protection
 
 ```
-1. أنشئ Function جديد في supabase/functions/
-   supabase/functions/my-function/index.ts
-
-2. اكتب الكود (Deno):
-   Deno.serve(async (req) => { ... })
-
-3. أضف Secrets إن需要的:
-   supabase secrets set MY_SECRET=value
-
-4. ارفع وقم بـ PR
-
-5. بعد merge، deploy.yml ينشر:
-   supabase functions deploy my-function --project-ref <ref>
+main: PR required + 1 approval + CI passed + linear history
 ```
 
-### 8.4 How to Fix a CI Failure
+---
 
-```
-1. Check the failing workflow in GitHub Actions tab
-
-2. Most common causes:
-
-   a) Format error:
-      pnpm format --write "**/*.ts"
-      git add . && git commit --amend --no-edit
-      git push --force (only if not pushed yet)
-
-   b) TypeScript error:
-      pnpm typecheck
-      → Fix the type errors
-
-   c) Test coverage below threshold:
-      → Add more tests or adjust thresholds (if justified)
-
-   d) Build error:
-      → Check Next.js/Expo build logs
-
-3. Fix, commit, push:
-   git add . && git commit -m "fix: ci issue"
-   git push
-```
-
-### 8.5 ملخص الأوامر الأساسية
+## 11. الأوامر المرجعية
 
 ```bash
-# Setup
-pnpm install
-pnpm dev                    # تشغيل كل التطبيقات
+# تطوير
+pnpm install                    # تثبيت الحزم
+pnpm dev                        # تشغيل كل التطبيقات
+pnpm --filter admin-dashboard dev  # لوحة التحكم فقط
+pnpm --filter mobile-app start     # التطبيق المحمول فقط
 
-# Code Quality
-pnpm format --write          # تنسيق الكود
-pnpm typecheck              # فحص الأنواع
-pnpm test                   # تشغيل الاختبارات
-pnpm test -- --coverage     # مع التغطية
-pnpm build                  # بناء كل التطبيقات
+# جودة الكود
+pnpm format --write             # تنسيق الكود
+pnpm typecheck                  # فحص TypeScript
+pnpm test                       # 123 اختبار
+pnpm test -- --coverage         # مع التغطية
+pnpm test:e2e                   # E2E
 
-# Database
-pnpm db:push                # Drizzle: رفع schema
-pnpm db:studio              # Drizzle: فتح Studio
-pnpm seed                   # إضافة بيانات تجريبية
+# بناء
+pnpm build                      # بناء كل التطبيقات
+pnpm --filter admin-dashboard build  # لوحة التحكم فقط
 
-# Supabase CLI
-supabase db push            # تطبيق migrations على production
-supabase functions deploy <name>
-supabase secrets set KEY=value
+# قاعدة البيانات
+supabase db push --dry-run      # اختبار قبل التطبيق
+supabase db push                # تطبيق migrations
+supabase migration list         # قائمة الـ migrations
 
-# GitHub
-gh pr create --title "..." --body "..."
-gh pr merge <number> --squash
-gh run watch                # مراقبة الـ CI
+# Edge Functions
+supabase functions deploy trip-engine
+supabase functions deploy send-notification
+supabase functions deploy zaincash-checkout
+supabase functions deploy zaincash-webhook
+
+# Secrets
+supabase secrets set ADMIN_URL=https://your-domain.com
+supabase secrets set ZAINCASH_SECRET=...
 ```
 
 ---
 
-## 9. هيكل المشروع والملفات الرئيسية
+## الملحق: قائمة "لا تفعل"
 
-### 9.1 الملفات الحرجة
-
-| الملف                                               | الوظيفة                                             |
-| --------------------------------------------------- | --------------------------------------------------- |
-| `apps/admin/src/providers/authProvider.ts`          | تسجيل دخول admin، التحقق من الدور من `app_metadata` |
-| `apps/admin/src/app/page.tsx`                       | لوحة التحكم — تستخدم `get_dashboard_stats()` RPC    |
-| `apps/mobile/src/hooks/useTrips.ts`                 | إدارة الرحلات + تتبع GPS + Offline queue            |
-| `apps/mobile/src/hooks/useNetworkStatus.ts`         | فحص الشبكة عبر `ping()` RPC                         |
-| `apps/mobile/src/hooks/useRoutes.ts`                | جلب الخطوط مع pagination                            |
-| `apps/mobile/src/stores/useStore.ts`                | Zustand stores                                      |
-| `packages/core/index.ts`                            | Zod schemas, state machine, i18n                    |
-| `supabase/functions/trip-engine/index.ts`           | تحديث حالة الرحلة                                   |
-| `supabase/functions/atomic-booking/index.ts`        | حجز المقعد                                          |
-| `supabase/migrations/2026051005_critical_fixes.sql` | RPCs، indexes، RLS policies                         |
-
-### 9.2 متغيرات البيئة
-
-**Admin (`apps/admin/.env.local`):**
-
-```
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-DATABASE_URL=postgres://...
-```
-
-**Mobile (`apps/mobile/.env`):**
-
-```
-EXPO_PUBLIC_SUPABASE_URL=
-EXPO_PUBLIC_SUPABASE_ANON_KEY=
-EXPO_PUBLIC_SUPABASE_URL_AND_ANON_KEY=
-```
-
-**Supabase Secrets (for Edge Functions):**
-
-```
-SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
-ADMIN_URL=
-```
-
-### 9.3 Supabase Projects
-
-| المشروع          | ref                    | الاستخدام             |
-| ---------------- | ---------------------- | --------------------- |
-| في `.env` (محلي) | `pfjsqgqrxnrlrfnchnqf` | التطوير المحلي        |
-| للإنتاج (linked) | `zpcvvyxtmxzplmojobbv` | Production deployment |
-
----
-
-## الملحق: خريطة الذاكرة (Mental Model)
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      UniRide Platform                        │
-│                                                             │
-│  ┌─────────────┐     ┌─────────────┐     ┌──────────────┐  │
-│  │   Mobile    │     │    Admin    │     │  GitHub      │  │
-│  │   (Expo)    │     │  (Next.js)  │     │  (CI/CD)     │  │
-│  └──────┬──────┘     └──────┬──────┘     └──────┬───────┘  │
-│         │                   │                    │          │
-│         ▼                   ▼                    ▼          │
-│  ┌─────────────────────────────────────────────────────────┐│
-│  │              Supabase (Backend-as-a-Service)            ││
-│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐               ││
-│  │  │   Auth   │  │  Postgres │  │Edge Funcs│               ││
-│  │  │  (JWT)   │  │  (RLS)    │  │  (Deno)  │               ││
-│  │  └──────────┘  └──────────┘  └──────────┘               ││
-│  └─────────────────────────────────────────────────────────┘│
-│         │                   │                    │          │
-│         ▼                   ▼                    ▼          │
-│  ┌─────────────┐     ┌─────────────┐     ┌──────────────┐  │
-│  │   Student   │     │   Admin     │     │   Driver    │  │
-│  │    Role     │     │    Role     │     │    Role     │  │
-│  └─────────────┘     └─────────────┘     └──────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-```
+| ❌ لا تفعل                     | ✅ افعل بدلاً من ذلك         |
+| ------------------------------ | ---------------------------- |
+| `user_metadata.role`           | `app_metadata.role`          |
+| `pageSize: 0`                  | RPC مُحسّن                   |
+| `Map()` للـ rate limiting      | `rate_limits` table          |
+| `console.log/warn`             | `logger.info/warn/error`     |
+| `packages/db` (Drizzle)        | كتابة migration جديد         |
+| دمج `payload.new` في Realtime  | إعادة fetch كاملة            |
+| `reserve_seat()`               | `activate_license()`         |
+| camelCase في DataGrid          | snake_case                   |
+| `auth.uid()` كـ driver_id      | `drivers.id` من جدول drivers |
+| `*` في CORS                    | قائمة origins محددة          |
+| `anon` يستدعي SECURITY DEFINER | `REVOKE EXECUTE FROM anon`   |

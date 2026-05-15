@@ -65,6 +65,7 @@ export default function DriverCreate() {
                     'Select a user profile (preferably with driver role)'
                   }
                   required
+                  size={params.size ?? 'medium'}
                 />
               )}
             />

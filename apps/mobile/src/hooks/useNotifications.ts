@@ -2,16 +2,8 @@ import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
 
-/**
- * useNotifications — Safe for both Expo Go and Development Builds.
- *
- * Since SDK 53, expo-notifications removed Android push notification
- * support from Expo Go. We detect Expo Go at runtime and skip all
- * notification logic to prevent crashes.
- */
-
-// Detect if running in Expo Go
 function isExpoGo(): boolean {
   return Constants.appOwnership === 'expo';
 }
@@ -20,9 +12,8 @@ export function useNotifications() {
   const cleanupRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    // Skip notifications entirely in Expo Go — they are not supported since SDK 53
     if (isExpoGo()) {
-      console.warn('[Notifications] Skipping — not supported in Expo Go (SDK 53+)');
+      logger.warn('[Notifications] Skipping — not supported in Expo Go (SDK 53+)');
       return;
     }
 
@@ -30,11 +21,9 @@ export function useNotifications() {
 
     async function initPushNotifications() {
       try {
-        // Only import expo-notifications in development builds / standalone apps
         const Notifications = require('expo-notifications') as typeof import('expo-notifications');
         const Device = require('expo-device') as typeof import('expo-device');
 
-        // Set notification handler
         Notifications.setNotificationHandler({
           handleNotification: async () => ({
             shouldShowBanner: true,
@@ -54,7 +43,7 @@ export function useNotifications() {
         }
 
         if (!Device.isDevice) {
-          console.warn('[Notifications] Must use physical device for Push Notifications');
+          logger.warn('[Notifications] Must use physical device for Push Notifications');
           return;
         }
 
@@ -70,7 +59,7 @@ export function useNotifications() {
           finalStatus = status;
         }
         if (finalStatus !== 'granted') {
-          console.warn('[Notifications] Permission not granted');
+          logger.warn('[Notifications] Permission not granted');
           return;
         }
 
@@ -84,21 +73,19 @@ export function useNotifications() {
             p_token: token,
           });
           if (error) {
-            console.warn('[Notifications] Error saving push token:', error.message);
+            logger.warn('[Notifications] Error saving push token', { error: error.message });
           }
         }
 
-        // Setup listeners
         if (isMounted) {
           const notifSub = Notifications.addNotificationReceivedListener((notification) => {
-            console.warn('[Notifications] Received:', notification.request.content.title);
+            logger.info('[Notifications] Received', { title: notification.request.content.title });
           });
 
           const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
-            console.warn(
-              '[Notifications] Interaction:',
-              response.notification.request.content.body,
-            );
+            logger.info('[Notifications] Interaction', {
+              body: response.notification.request.content.body,
+            });
           });
 
           cleanupRef.current = () => {
@@ -107,7 +94,9 @@ export function useNotifications() {
           };
         }
       } catch (error) {
-        console.warn('[Notifications] Init failed:', error);
+        logger.warn('[Notifications] Init failed', {
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     }
 

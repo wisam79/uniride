@@ -13,8 +13,10 @@ import { useRouteById } from '../src/hooks/useRoutes';
 import { useBookingStore } from '../src/hooks/useStore';
 import { Colors, FontFamily, Spacing, BorderRadius, Shadow } from '../src/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from '../src/hooks/useTranslation';
 
 export default function BookingScreen() {
+  const { t, isRTL } = useTranslation();
   const { routeId } = useLocalSearchParams<{ routeId: string }>();
   const { route, isLoading } = useRouteById(routeId || null);
   const { isBooking, setBooking, setBookingResult } = useBookingStore();
@@ -31,11 +33,11 @@ export default function BookingScreen() {
     setBooking(true);
     setBookingResult(null, null);
     setBooking(false);
-    Alert.alert('التفعيل مطلوب', 'الحجز يتم عبر كود ترخيص. افتح شاشة التفعيل الآن.', [
-      { text: 'إلغاء', style: 'cancel' },
-      { text: 'فتح التفعيل', onPress: () => router.push('/activate') },
+    Alert.alert(t('activation_required'), t('activation_prompt'), [
+      { text: t('cancel'), style: 'cancel' },
+      { text: t('open_activation'), onPress: () => router.push('/activate') },
     ]);
-  }, [isBooking, router, setBooking, setBookingResult]);
+  }, [isBooking, router, setBooking, setBookingResult, t]);
 
   if (isLoading) {
     return (
@@ -48,9 +50,9 @@ export default function BookingScreen() {
   if (!route) {
     return (
       <View style={styles.center}>
-        <Text style={styles.errorText}>لم يتم العثور على الخط</Text>
+        <Text style={styles.errorText}>{t('route_not_found')}</Text>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backText}>رجوع</Text>
+          <Text style={styles.backText}>{t('go_back')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -59,25 +61,29 @@ export default function BookingScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.routeCard}>
-        <Text style={styles.routeTitle}>{route.title}</Text>
+        <Text style={[styles.routeTitle, { textAlign: isRTL ? 'right' : 'left' }]}>
+          {route.title}
+        </Text>
 
         <View style={styles.detailRow}>
-          <Text style={styles.label}>من</Text>
+          <Text style={styles.label}>{t('from')}</Text>
           <Text style={styles.value}>{route.start_location}</Text>
         </View>
 
         <View style={styles.detailRow}>
-          <Text style={styles.label}>إلى</Text>
+          <Text style={styles.label}>{t('to')}</Text>
           <Text style={styles.value}>{route.end_location}</Text>
         </View>
 
         <View style={styles.detailRow}>
-          <Text style={styles.label}>السعر</Text>
-          <Text style={styles.priceValue}>{route.price.toLocaleString()} د.ع</Text>
+          <Text style={styles.label}>{t('price')}</Text>
+          <Text style={styles.priceValue}>
+            {route.price.toLocaleString()} {t('currency')}
+          </Text>
         </View>
 
         <View style={styles.detailRow}>
-          <Text style={styles.label}>المقاعد المتاحة</Text>
+          <Text style={styles.label}>{t('seats_available')}</Text>
           <View style={styles.seatBadge}>
             <Ionicons name="people-outline" size={16} color={Colors.primary} />
             <Text style={[styles.seatsValue, route.available_seats <= 2 && styles.seatsWarning]}>
@@ -104,10 +110,10 @@ export default function BookingScreen() {
               name="ticket-outline"
               size={20}
               color={Colors.white}
-              style={{ position: 'absolute', right: Spacing.xl }}
+              style={{ position: 'absolute', [isRTL ? 'left' : 'right']: Spacing.xl }}
             />
             <Text style={styles.bookButtonText}>
-              {route.available_seats <= 0 ? 'لا توجد مقاعد متاحة' : 'تفعيل الترخيص'}
+              {route.available_seats <= 0 ? t('no_seats') : t('activate_license')}
             </Text>
           </>
         )}
@@ -132,7 +138,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: Colors.text,
     marginBottom: Spacing.lg,
-    textAlign: 'right',
   },
   // Details
   detailRow: {

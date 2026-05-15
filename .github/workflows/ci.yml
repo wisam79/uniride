@@ -27,7 +27,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Format Check
-        run: pnpm format --check
+        run: pnpm format:check
 
       - name: Typecheck
         run: pnpm typecheck
@@ -48,7 +48,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Run Tests
-        run: pnpm test -- --coverage --coverage.threshold.lines=60 --coverage.threshold.branches=50 --coverage.threshold.functions=50
+        run: pnpm test -- --coverage --coverage.threshold.lines=80 --coverage.threshold.branches=70 --coverage.threshold.functions=75
 
       - name: Upload Coverage
         if: always()

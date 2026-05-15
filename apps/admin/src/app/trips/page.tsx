@@ -1,76 +1,72 @@
 'use client';
 
-import { useMany } from '@refinedev/core';
 import { List, useDataGrid, DateField, EditButton, ShowButton } from '@refinedev/mui';
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
 import React from 'react';
-import { Stack, Chip } from '@mui/material';
+import { Chip, Stack, Typography, Box } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 
 const STATUS_COLORS: Record<
   string,
   'default' | 'primary' | 'success' | 'error' | 'warning' | 'info'
 > = {
-  scheduled: 'warning',
-  driver_waiting: 'info',
+  scheduled: 'default',
+  driver_waiting: 'warning',
   in_transit: 'primary',
   completed: 'success',
-  absent: 'default',
+  absent: 'error',
   cancelled: 'error',
 };
 
 export default function TripList() {
+  const { t } = useTranslation();
   const { dataGridProps } = useDataGrid({
     resource: 'trips',
-  });
-
-  const { data: routeData, isLoading: routeIsLoading } = useMany({
-    resource: 'routes',
-    ids: dataGridProps?.rows?.map((item: any) => item?.route_id).filter(Boolean) ?? [],
-    queryOptions: {
-      enabled: !!dataGridProps?.rows,
-    },
   });
 
   const columns = React.useMemo<GridColDef[]>(
     () => [
       {
         field: 'id',
-        headerName: 'ID',
+        headerName: t('trips.fields.id'),
         type: 'string',
         minWidth: 100,
         flex: 1,
       },
       {
-        field: 'route_id',
-        headerName: 'Route',
+        field: 'routeId',
+        headerName: t('trips.fields.route'),
         type: 'string',
-        minWidth: 200,
+        minWidth: 150,
         flex: 1,
-        renderCell: function render({ value }) {
-          if (routeIsLoading) return <>Loading...</>;
-          const route = routeData?.data?.find((item) => item.id === value);
-          return route ? route.title : value;
-        },
+      },
+      {
+        field: 'driverId',
+        headerName: t('trips.fields.driver'),
+        type: 'string',
+        minWidth: 150,
+        flex: 1,
       },
       {
         field: 'status',
-        headerName: 'Status',
+        headerName: t('trips.fields.status'),
         type: 'string',
-        minWidth: 150,
+        minWidth: 120,
         flex: 1,
         renderCell: function render({ value }) {
           return (
             <Chip
-              label={value?.replace('_', ' ')}
+              label={t(value)}
               color={STATUS_COLORS[value] || 'default'}
               size="small"
+              variant="outlined"
             />
           );
         },
       },
       {
-        field: 'scheduled_at',
-        headerName: 'Scheduled',
+        field: 'scheduledAt',
+        headerName: t('trips.fields.scheduledAt'),
         minWidth: 180,
         flex: 1,
         renderCell: function render({ value }) {
@@ -78,8 +74,8 @@ export default function TripList() {
         },
       },
       {
-        field: 'started_at',
-        headerName: 'Started',
+        field: 'startedAt',
+        headerName: t('trips.fields.startedAt'),
         minWidth: 180,
         flex: 1,
         renderCell: function render({ value }) {
@@ -87,36 +83,29 @@ export default function TripList() {
         },
       },
       {
-        field: 'ended_at',
-        headerName: 'Ended',
-        minWidth: 180,
-        flex: 1,
-        renderCell: function render({ value }) {
-          return value ? new Date(value).toLocaleString() : '-';
+        field: 'actions',
+        headerName: t('trips.fields.actions'),
+        sortable: false,
+        renderCell: function render({ row }) {
+          return (
+            <Stack
+              direction="row"
+              spacing={1}
+              alignItems="center"
+              justifyContent="center"
+              height="100%"
+            >
+              <ShowButton hideText recordItemId={row.id} />
+              <EditButton hideText recordItemId={row.id} />
+            </Stack>
+          );
         },
-      },
-      {
-        field: 'last_lat',
-        headerName: 'Lat',
-        type: 'string',
-        minWidth: 100,
-        flex: 0.5,
-        renderCell: function render({ value }) {
-          return value ? parseFloat(value).toFixed(4) : '-';
-        },
-      },
-      {
-        field: 'last_lng',
-        headerName: 'Lng',
-        type: 'string',
-        minWidth: 100,
-        flex: 0.5,
-        renderCell: function render({ value }) {
-          return value ? parseFloat(value).toFixed(4) : '-';
-        },
+        align: 'center',
+        headerAlign: 'center',
+        minWidth: 120,
       },
     ],
-    [routeData?.data, routeIsLoading],
+    [t],
   );
 
   return (

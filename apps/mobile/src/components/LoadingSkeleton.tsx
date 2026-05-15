@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, Animated, Easing } from 'react-native';
+import { Colors } from '../theme';
 
 export function LoadingCard() {
   const opacity = React.useRef(new Animated.Value(0.3)).current;
@@ -47,14 +48,14 @@ export function LoadingList({ count = 3 }: { count?: number }) {
 const styles = StyleSheet.create({
   container: { padding: 15 },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: Colors.surface,
     borderRadius: 12,
     padding: 16,
     marginBottom: 15,
   },
   line: {
     height: 14,
-    backgroundColor: '#e0e0e0',
+    backgroundColor: Colors.border,
     borderRadius: 4,
     marginBottom: 10,
   },

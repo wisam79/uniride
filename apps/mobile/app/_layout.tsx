@@ -1,5 +1,7 @@
+import React, { useEffect, useState } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
-import { useEffect, useCallback } from 'react';
+import * as SecureStore from 'expo-secure-store';
+import { OfflineCache } from '../src/lib/offlineCache';
 import { supabase } from '../src/lib/supabase';
 import { useAuthStore } from '../src/hooks/useStore';
 import { useTranslation } from '../src/hooks/useTranslation';
@@ -8,16 +10,18 @@ import { useNotifications } from '../src/hooks/useNotifications';
 import { I18nManager, View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { ErrorBoundary } from '../src/components/ErrorBoundary';
 import { Colors } from '../src/theme';
+import { logger } from '../src/lib/logger';
+import * as Font from 'expo-font';
 import {
-  useFonts,
   IBMPlexSansArabic_400Regular,
   IBMPlexSansArabic_500Medium,
   IBMPlexSansArabic_700Bold,
 } from '@expo-google-fonts/ibm-plex-sans-arabic';
 import * as SplashScreen from 'expo-splash-screen';
 
-// Keep the splash screen visible while fonts load
 SplashScreen.preventAutoHideAsync();
+
+const FONT_TIMEOUT_MS = 6000;
 
 export default function Layout() {
   const { user, role, initialized, setAuth, setProfile, setInitialized } = useAuthStore();
@@ -25,17 +29,37 @@ export default function Layout() {
   const router = useRouter();
   const { isRTL, t } = useTranslation();
   const { isOnline } = useNetworkStatus();
+  const [fontsLoaded, setFontsLoaded] = useState(false);
+  const [fontTimedOut, setFontTimedOut] = useState(false);
 
-  // Initialize push notifications globally
   useNotifications();
 
-  const [fontsLoaded, fontError] = useFonts({
-    IBMPlexSansArabic_400Regular,
-    IBMPlexSansArabic_500Medium,
-    IBMPlexSansArabic_700Bold,
-  });
+  // Load fonts manually to avoid hook conflicts from wrapper packages
+  useEffect(() => {
+    const timer = setTimeout(() => setFontTimedOut(true), FONT_TIMEOUT_MS);
 
-  // RTL setup
+    Font.loadAsync({
+      IBMPlexSansArabic_400Regular: IBMPlexSansArabic_400Regular,
+      IBMPlexSansArabic_500Medium: IBMPlexSansArabic_500Medium,
+      IBMPlexSansArabic_700Bold: IBMPlexSansArabic_700Bold,
+    })
+      .then(() => {
+        setFontsLoaded(true);
+        clearTimeout(timer);
+      })
+      .catch((err) => {
+        logger.warn('[Fonts] Load failed', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        setFontsLoaded(true);
+        clearTimeout(timer);
+      });
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  const canRender = fontsLoaded || fontTimedOut;
+
   useEffect(() => {
     if (isRTL) {
       I18nManager.allowRTL(true);
@@ -43,23 +67,21 @@ export default function Layout() {
     }
   }, [isRTL]);
 
-  // Auth listener
   useEffect(() => {
     supabase.auth
       .getSession()
       .then(async ({ data: { session } }) => {
         try {
           if (session?.user) {
-            const role = session.user.app_metadata?.role || 'student'; // SECURITY: app_metadata only
+            const role = session.user.app_metadata?.role || 'student';
+            // ✅ لا نمرر user_metadata — app_metadata فقط للـ role
             setAuth(
               {
                 id: session.user.id,
-                email: session.user.email,
-                user_metadata: session.user.user_metadata,
+                ...(session.user.email !== undefined ? { email: session.user.email } : {}),
               },
               role,
             );
-            // Fetch full profile from DB (includes institution_id for smart matching)
             const { data: profileData } = await supabase
               .from('profiles')
               .select('full_name, phone, institution_id')
@@ -74,13 +96,17 @@ export default function Layout() {
             }
           }
         } catch (error) {
-          console.warn('[Auth] getSession inner error:', error);
+          logger.error('[Auth] getSession inner error', {
+            error: error instanceof Error ? error.message : String(error),
+          });
         } finally {
           setInitialized(true);
         }
       })
       .catch((error) => {
-        console.warn('[Auth] getSession error:', error);
+        logger.error('[Auth] getSession error', {
+          error: error instanceof Error ? error.message : String(error),
+        });
         setInitialized(true);
       });
 
@@ -89,16 +115,15 @@ export default function Layout() {
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
       try {
         if (session?.user) {
-          const role = session.user.app_metadata?.role || 'student'; // SECURITY: app_metadata only
+          const role = session.user.app_metadata?.role || 'student';
+          // ✅ لا نمرر user_metadata — app_metadata فقط للـ role
           setAuth(
             {
               id: session.user.id,
-              email: session.user.email,
-              user_metadata: session.user.user_metadata,
+              ...(session.user.email !== undefined ? { email: session.user.email } : {}),
             },
             role,
           );
-          // Fetch full profile from DB (includes institution_id for smart matching)
           const { data: profileData } = await supabase
             .from('profiles')
             .select('full_name, phone, institution_id')
@@ -113,9 +138,17 @@ export default function Layout() {
           }
         } else {
           setAuth(null, null);
+          // REQ-5: تنظيف SecureStore عند تسجيل الخروج
+          Promise.all([
+            SecureStore.deleteItemAsync('auth-storage').catch(() => {}),
+            SecureStore.deleteItemAsync('booking-storage').catch(() => {}),
+            OfflineCache.clear(),
+          ]).catch(() => {});
         }
       } catch (error) {
-        console.warn('[Auth] onAuthStateChange inner error:', error);
+        logger.error('[Auth] onAuthStateChange inner error', {
+          error: error instanceof Error ? error.message : String(error),
+        });
       } finally {
         setInitialized(true);
       }
@@ -124,7 +157,6 @@ export default function Layout() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Navigation guard
   useEffect(() => {
     if (!initialized) return;
 
@@ -141,15 +173,13 @@ export default function Layout() {
     }
   }, [initialized, segments, user]);
 
-  // Hide splash screen once fonts are ready
-  const onLayoutRootView = useCallback(async () => {
-    if (fontsLoaded || fontError) {
-      await SplashScreen.hideAsync();
+  useEffect(() => {
+    if (canRender) {
+      SplashScreen.hideAsync().catch(() => {});
     }
-  }, [fontsLoaded, fontError]);
+  }, [canRender]);
 
-  // Show brand-colored loading while fonts load
-  if (!fontsLoaded && !fontError) {
+  if (!canRender) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator color={Colors.primary} size="large" />
@@ -157,31 +187,29 @@ export default function Layout() {
     );
   }
 
-  if (!initialized) return null;
-
   return (
     <ErrorBoundary>
-      <View style={styles.root} onLayout={onLayoutRootView}>
+      <View style={styles.root}>
         {!isOnline && (
           <View style={styles.offlineBanner}>
             <Text style={styles.offlineText}>{t('no_internet')}</Text>
           </View>
         )}
-        <Stack screenOptions={{ headerShown: true, headerBackTitle: 'رجوع' }}>
-          <Stack.Screen name="index" options={{ title: 'الرئيسية', headerShown: false }} />
-          <Stack.Screen name="booking" options={{ title: 'حجز رحلة' }} />
+        <Stack screenOptions={{ headerShown: true, headerBackTitle: t('go_back_short') }}>
+          <Stack.Screen name="index" options={{ title: t('home'), headerShown: false }} />
+          <Stack.Screen name="booking" options={{ title: t('book_trip') }} />
           <Stack.Screen name="login" options={{ headerShown: false }} />
           <Stack.Screen name="onboarding" options={{ headerShown: false }} />
-          <Stack.Screen name="profile" options={{ title: 'الحساب' }} />
-          <Stack.Screen name="subscriptions" options={{ title: 'اشتراكاتي' }} />
-          <Stack.Screen name="tracking/[tripId]" options={{ title: 'تتبع الرحلة' }} />
-          <Stack.Screen name="activate" options={{ title: 'تفعيل اشتراك' }} />
-          <Stack.Screen name="create-trip" options={{ title: 'إنشاء رحلة' }} />
+          <Stack.Screen name="profile" options={{ title: t('account') }} />
+          <Stack.Screen name="subscriptions" options={{ title: t('my_subscriptions') }} />
+          <Stack.Screen name="tracking/[tripId]" options={{ title: t('live_tracking') }} />
+          <Stack.Screen name="activate" options={{ title: t('activate_subscription') }} />
+          <Stack.Screen name="create-trip" options={{ title: t('create_trip') }} />
           <Stack.Screen
             name="rating/[tripId]"
-            options={{ title: 'تقييم الرحلة', headerShown: false }}
+            options={{ title: t('rating'), headerShown: false }}
           />
-          <Stack.Screen name="driver" options={{ title: 'لوحة السائق', headerShown: false }} />
+          <Stack.Screen name="driver" options={{ title: t('driver_dashboard'), headerShown: false }} />
         </Stack>
       </View>
     </ErrorBoundary>

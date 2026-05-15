@@ -14,19 +14,21 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../src/lib/supabase';
+import { useTranslation } from '../../src/hooks/useTranslation';
 import { Colors, FontFamily, Spacing, BorderRadius, Shadow } from '../../src/theme';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function RatingScreen() {
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const router = useRouter();
+  const { t, isRTL } = useTranslation();
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async () => {
     if (rating === 0) {
-      Alert.alert('تنبيه', 'يرجى اختيار عدد النجوم للتقييم');
+      Alert.alert(t('alert'), t('please_rate'));
       return;
     }
 
@@ -40,11 +42,11 @@ export default function RatingScreen() {
 
       if (error) throw error;
 
-      Alert.alert('شكراً لك', 'تم إرسال تقييمك بنجاح!', [
-        { text: 'حسناً', onPress: () => router.push('/') },
+      Alert.alert(t('thank_you'), t('rating_success'), [
+        { text: t('ok'), onPress: () => router.push('/') },
       ]);
     } catch (err: any) {
-      Alert.alert('خطأ', err.message || 'حدث خطأ أثناء إرسال التقييم');
+      Alert.alert(t('error'), err.message || t('error_generic'));
     } finally {
       setIsSubmitting(false);
     }
@@ -59,8 +61,8 @@ export default function RatingScreen() {
 
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.title}>كيف كانت رحلتك؟</Text>
-          <Text style={styles.subtitle}>تقييمك يساعدنا في تحسين جودة النقل للجميع</Text>
+          <Text style={styles.title}>{t('how_was_trip')}</Text>
+          <Text style={styles.subtitle}>{t('rating_subtitle')}</Text>
         </View>
 
         <View style={styles.starContainer}>
@@ -76,10 +78,12 @@ export default function RatingScreen() {
         </View>
 
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>ملاحظات إضافية (اختياري)</Text>
+          <Text style={[styles.label, { textAlign: isRTL ? 'right' : 'left' }]}>
+            {t('additional_notes_optional')}
+          </Text>
           <TextInput
-            style={styles.textInput}
-            placeholder="اكتب تعليقك هنا..."
+            style={[styles.textInput, { textAlign: isRTL ? 'right' : 'left' }]}
+            placeholder={t('comment_placeholder')}
             placeholderTextColor={Colors.textMuted}
             multiline
             numberOfLines={4}
@@ -96,7 +100,7 @@ export default function RatingScreen() {
           {isSubmitting ? (
             <ActivityIndicator color={Colors.white} />
           ) : (
-            <Text style={styles.submitText}>إرسال التقييم</Text>
+            <Text style={styles.submitText}>{t('submit_rating')}</Text>
           )}
         </TouchableOpacity>
 
@@ -105,7 +109,7 @@ export default function RatingScreen() {
           onPress={() => router.push('/')}
           disabled={isSubmitting}
         >
-          <Text style={styles.skipText}>تخطي</Text>
+          <Text style={styles.skipText}>{t('skip')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>

@@ -1,0 +1,18 @@
+# .github/CODEOWNERS
+# يُحدد هذا الملف المراجعين المطلوبين تلقائياً لكل Pull Request بناءً على المسار المُعدَّل.
+
+# Admin frontend
+apps/admin/                    @uniride/admin-frontend
+
+# Mobile app
+apps/mobile/                   @uniride/mobile
+
+# Backend & Edge Functions
+supabase/                      @uniride/backend
+
+# Core shared library
+packages/core/                 @uniride/core-lib
+
+# CI/CD & Migrations (DevOps/lead)
+.github/workflows/             @uniride/devops
+supabase/migrations/           @uniride/devops

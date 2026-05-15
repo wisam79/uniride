@@ -21,12 +21,9 @@ export default function RouteCreate() {
     saveButtonProps,
     refineCore: { formLoading },
     register,
-    setValue,
     watch,
     formState: { errors },
   } = useForm<BaseRecord, HttpError, FormValues>();
-
-  const selectedDriverId = watch('driver_id');
 
   return (
     <Create isLoading={formLoading} saveButtonProps={saveButtonProps}>
@@ -133,7 +130,7 @@ export default function RouteCreate() {
           name="available_seats"
         />
         <FormControlLabel
-          control={<Checkbox {...register('is_active')} defaultChecked={true} name="is_active" />}
+          control={<Checkbox {...register('is_active')} name="is_active" />}
           label="Is Active"
         />
       </Box>

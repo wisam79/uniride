@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import MapView, { Marker, Polyline, UrlTile, PROVIDER_DEFAULT } from 'react-native-maps';
 import { Colors } from '../theme';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from '../hooks/useTranslation';
 
 interface TripMapProps {
   startLat: number;
@@ -22,6 +23,7 @@ export const TripMap: React.FC<TripMapProps> = ({
   driverLng,
 }) => {
   const mapRef = useRef<MapView>(null);
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (mapRef.current) {
@@ -75,14 +77,14 @@ export const TripMap: React.FC<TripMapProps> = ({
         />
 
         {/* Start Point */}
-        <Marker coordinate={{ latitude: startLat, longitude: startLng }} title="نقطة الانطلاق">
+        <Marker coordinate={{ latitude: startLat, longitude: startLng }} title={t('start_point')}>
           <View style={[styles.markerCircle, { backgroundColor: Colors.primary }]}>
             <Ionicons name="radio-button-on" size={16} color={Colors.white} />
           </View>
         </Marker>
 
         {/* End Point */}
-        <Marker coordinate={{ latitude: endLat, longitude: endLng }} title="نقطة الوصول">
+        <Marker coordinate={{ latitude: endLat, longitude: endLng }} title={t('end_point')}>
           <View style={[styles.markerCircle, { backgroundColor: Colors.secondary }]}>
             <Ionicons name="flag" size={16} color={Colors.white} />
           </View>
@@ -90,7 +92,7 @@ export const TripMap: React.FC<TripMapProps> = ({
 
         {/* Driver Point */}
         {driverLat && driverLng && (
-          <Marker coordinate={{ latitude: driverLat, longitude: driverLng }} title="موقع السائق">
+          <Marker coordinate={{ latitude: driverLat, longitude: driverLng }} title={t('driver_location')}>
             <View
               style={[
                 styles.markerCircle,

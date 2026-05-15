@@ -60,8 +60,9 @@ export default function TripCreate() {
                   margin="normal"
                   variant="outlined"
                   error={!!errors?.route_id}
-                  helperText={errors?.route_id?.message}
+                  helperText={errors?.route_id?.message ?? undefined}
                   required
+                  size={params.size ?? 'medium'}
                 />
               )}
             />
@@ -98,6 +99,7 @@ export default function TripCreate() {
                   error={!!errors?.driver_id}
                   helperText={errors?.driver_id?.message || 'Select the driver for this trip'}
                   required
+                  size={params.size ?? 'medium'}
                 />
               )}
             />
