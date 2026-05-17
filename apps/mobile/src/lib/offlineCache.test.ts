@@ -1,19 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('@react-native-async-storage/async-storage', () => ({
-  default: {
-    getItem: vi.fn(),
-    setItem: vi.fn(),
-    removeItem: vi.fn(),
-  },
+vi.mock('expo-secure-store', () => ({
+  getItemAsync: vi.fn(),
+  setItemAsync: vi.fn(),
+  deleteItemAsync: vi.fn(),
+  WHEN_UNLOCKED: 'WHEN_UNLOCKED',
 }));
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { OfflineCache } from './offlineCache';
 
-const mockGet = vi.mocked(AsyncStorage.getItem);
-const mockSet = vi.mocked(AsyncStorage.setItem);
-const mockDelete = vi.mocked(AsyncStorage.removeItem);
+const mockGet = vi.mocked(SecureStore.getItemAsync);
+const mockSet = vi.mocked(SecureStore.setItemAsync);
+const mockDelete = vi.mocked(SecureStore.deleteItemAsync);
 
 const uuid = '123e4567-e89b-12d3-a456-426614174000';
 const uuid2 = '223e4567-e89b-12d3-a456-426614174001';
@@ -29,7 +28,7 @@ describe('OfflineCache', () => {
   // ── saveActiveSubscription ──────────────────────────────────────────────────
 
   describe('saveActiveSubscription', () => {
-    it('saves subscription to AsyncStorage', async () => {
+    it('saves subscription to SecureStore', async () => {
       mockSet.mockResolvedValue(undefined);
 
       const sub = {
@@ -49,7 +48,7 @@ describe('OfflineCache', () => {
       expect(firstCall).toBeDefined();
       const key = firstCall?.[0];
       const value = firstCall?.[1];
-      expect(key).toBe('@uniride_active_subscription');
+      expect(key).toBe('uniride_active_subscription');
       const parsed = JSON.parse(value as string);
       expect(parsed.data.id).toBe(uuid);
       expect(parsed.cachedAt).toBeTruthy();
@@ -60,7 +59,7 @@ describe('OfflineCache', () => {
 
       await OfflineCache.saveActiveSubscription(null);
 
-      expect(mockDelete).toHaveBeenCalledWith('@uniride_active_subscription');
+      expect(mockDelete).toHaveBeenCalledWith('uniride_active_subscription');
       expect(mockSet).not.toHaveBeenCalled();
     });
   });
@@ -112,7 +111,7 @@ describe('OfflineCache', () => {
 
       const result = await OfflineCache.getActiveSubscription();
       expect(result).toBeNull();
-      expect(mockDelete).toHaveBeenCalledWith('@uniride_active_subscription');
+      expect(mockDelete).toHaveBeenCalledWith('uniride_active_subscription');
     });
 
     it('returns null and deletes on malformed JSON', async () => {
@@ -121,7 +120,6 @@ describe('OfflineCache', () => {
 
       const result = await OfflineCache.getActiveSubscription();
       expect(result).toBeNull();
-      // It will throw JSON.parse error and go to catch block, it doesn't call mockDelete on parse error.
     });
   });
 
@@ -133,7 +131,7 @@ describe('OfflineCache', () => {
 
       await OfflineCache.clear();
 
-      expect(mockDelete).toHaveBeenCalledWith('@uniride_active_subscription');
+      expect(mockDelete).toHaveBeenCalledWith('uniride_active_subscription');
     });
   });
 
@@ -156,7 +154,7 @@ describe('OfflineCache', () => {
 
       await OfflineCache.saveActiveSubscription(sub);
 
-      expect(consoleWarnSpy).toHaveBeenCalledWith('Failed to save subscription to offline cache', err);
+      expect(consoleWarnSpy).toHaveBeenCalledWith('Failed to save subscription to secure cache', err);
     });
 
     it('calls console.warn when getItem fails', async () => {
@@ -166,16 +164,16 @@ describe('OfflineCache', () => {
       const result = await OfflineCache.getActiveSubscription();
 
       expect(result).toBeNull();
-      expect(consoleWarnSpy).toHaveBeenCalledWith('Failed to retrieve subscription from offline cache', err);
+      expect(consoleWarnSpy).toHaveBeenCalledWith('Failed to retrieve subscription from secure cache', err);
     });
 
-    it('calls console.warn when removeItem fails on clear', async () => {
+    it('calls console.warn when deleteItem fails on clear', async () => {
       const err = new Error('Remove error');
       mockDelete.mockRejectedValue(err);
 
       await OfflineCache.clear();
 
-      expect(consoleWarnSpy).toHaveBeenCalledWith('Failed to clear offline cache', err);
+      expect(consoleWarnSpy).toHaveBeenCalledWith('Failed to clear secure cache', err);
     });
   });
 });

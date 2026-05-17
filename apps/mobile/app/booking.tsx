@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useRouteById } from '../src/hooks/useRoutes';
-import { useSubscriptions } from '../src/hooks/useSubscriptions';
+import { useSubscriptions } from '../src/hooks/useTrips';
 import { useBookingStore } from '../src/hooks/useStore';
 import { Colors, FontFamily, Spacing, BorderRadius, Shadow } from '../src/theme';
 import { Ionicons } from '@expo/vector-icons';

@@ -13,8 +13,8 @@ import {
 } from 'react-native';
 import { supabase } from '../src/lib/supabase';
 import { useTranslation } from '../src/hooks/useTranslation';
-import { UserRole } from '@uniride/core';
-import { Colors, Typography, Spacing, BorderRadius, Shadow, FontFamily } from '../src/theme';
+import { UserRole, LoginSchema, SignupSchema } from '@uniride/core';
+import { Colors, Spacing, BorderRadius, Shadow, FontFamily } from '../src/theme';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function LoginScreen() {
@@ -25,20 +25,41 @@ export default function LoginScreen() {
   const [selectedRole, setSelectedRole] = useState<UserRole>('student');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  
   const { t, isRTL } = useTranslation();
 
+  const validate = () => {
+    setErrors({});
+    try {
+      if (isSignup) {
+        SignupSchema.parse({ email, password, fullName, role: selectedRole });
+      } else {
+        LoginSchema.parse({ email, password });
+      }
+      return true;
+    } catch (err: any) {
+      const newErrors: Record<string, string> = {};
+      err.errors?.forEach((e: any) => {
+        newErrors[e.path[0]] = t(e.message);
+      });
+      setErrors(newErrors);
+      return false;
+    }
+  };
+
   const handleLogin = async () => {
-    if (!email || !password) return;
+    if (!validate()) return;
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
-      Alert.alert('خطأ', error.message);
+      Alert.alert(t('error'), error.message);
     }
     setLoading(false);
   };
 
   const handleSignup = async () => {
-    if (!email || !password || !fullName) return;
+    if (!validate()) return;
     setLoading(true);
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -46,18 +67,16 @@ export default function LoginScreen() {
       options: {
         data: {
           full_name: fullName,
-          // NOTE: role in user_metadata is for display only
-          // app_metadata.role is set by admin after signup
         },
       },
     });
 
     if (error) {
-      Alert.alert('خطأ', error.message);
+      Alert.alert(t('error'), error.message);
     } else if (data.session) {
-      Alert.alert('مرحباً', 'تم إنشاء الحساب بنجاح!');
+      Alert.alert(t('success'), t('account_created'));
     } else {
-      Alert.alert('تحقق من بريدك', 'أرسلنا لك رابط تفعيل على بريدك الإلكتروني');
+      Alert.alert(t('check_inbox_title'), t('check_inbox_msg'));
     }
     setLoading(false);
   };
@@ -78,82 +97,91 @@ export default function LoginScreen() {
             <Ionicons name="bus" size={48} color={Colors.primary} />
           </View>
           <Text style={styles.appName}>UniRide</Text>
-          <Text style={styles.appNameAr}>يوني رايد</Text>
-          <Text style={styles.tagline}>نقل جامعي ذكي</Text>
+          <Text style={styles.appNameAr}>{t('welcome').split(' ')[0]}</Text>
+          <Text style={styles.tagline}>{t('uniride_tagline')}</Text>
         </View>
 
         {/* Card */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>{isSignup ? 'إنشاء حساب جديد' : 'تسجيل الدخول'}</Text>
+          <Text style={styles.cardTitle}>{isSignup ? t('signup') : t('login')}</Text>
 
           {isSignup && (
-            <View style={styles.inputWrapper}>
+            <View style={{ marginBottom: Spacing.md }}>
+              <View style={[styles.inputWrapper, errors.fullName && styles.inputError]}>
+                <Ionicons
+                  name="person-outline"
+                  size={18}
+                  color={Colors.textMuted}
+                  style={styles.inputIcon}
+                />
+                <TextInput
+                  style={[styles.input, isRTL && styles.inputRTL]}
+                  placeholder={t('full_name')}
+                  placeholderTextColor={Colors.textMuted}
+                  value={fullName}
+                  onChangeText={setFullName}
+                  autoCapitalize="words"
+                />
+              </View>
+              {errors.fullName && <Text style={styles.errorText}>{errors.fullName}</Text>}
+            </View>
+          )}
+
+          <View style={{ marginBottom: Spacing.md }}>
+            <View style={[styles.inputWrapper, errors.email && styles.inputError]}>
               <Ionicons
-                name="person-outline"
+                name="mail-outline"
                 size={18}
                 color={Colors.textMuted}
                 style={styles.inputIcon}
               />
               <TextInput
                 style={[styles.input, isRTL && styles.inputRTL]}
-                placeholder="الاسم الكامل"
+                placeholder={t('email')}
                 placeholderTextColor={Colors.textMuted}
-                value={fullName}
-                onChangeText={setFullName}
-                autoCapitalize="words"
+                value={email}
+                onChangeText={setEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
               />
             </View>
-          )}
-
-          <View style={styles.inputWrapper}>
-            <Ionicons
-              name="mail-outline"
-              size={18}
-              color={Colors.textMuted}
-              style={styles.inputIcon}
-            />
-            <TextInput
-              style={[styles.input, isRTL && styles.inputRTL]}
-              placeholder="البريد الإلكتروني"
-              placeholderTextColor={Colors.textMuted}
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-            />
+            {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
           </View>
 
-          <View style={styles.inputWrapper}>
-            <Ionicons
-              name="lock-closed-outline"
-              size={18}
-              color={Colors.textMuted}
-              style={styles.inputIcon}
-            />
-            <TextInput
-              style={[styles.input, styles.inputPassword, isRTL && styles.inputRTL]}
-              placeholder="كلمة المرور"
-              placeholderTextColor={Colors.textMuted}
-              secureTextEntry={!showPassword}
-              value={password}
-              onChangeText={setPassword}
-            />
-            <TouchableOpacity
-              onPress={() => setShowPassword(!showPassword)}
-              style={styles.eyeButton}
-            >
+          <View style={{ marginBottom: Spacing.md }}>
+            <View style={[styles.inputWrapper, errors.password && styles.inputError]}>
               <Ionicons
-                name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                name="lock-closed-outline"
                 size={18}
                 color={Colors.textMuted}
+                style={styles.inputIcon}
               />
-            </TouchableOpacity>
+              <TextInput
+                style={[styles.input, styles.inputPassword, isRTL && styles.inputRTL]}
+                placeholder={t('password')}
+                placeholderTextColor={Colors.textMuted}
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                style={styles.eyeButton}
+              >
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={18}
+                  color={Colors.textMuted}
+                />
+              </TouchableOpacity>
+            </View>
+            {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
           </View>
 
           {isSignup && (
             <View style={styles.roleSection}>
-              <Text style={styles.roleLabel}>أنا...</Text>
-              <View style={styles.roleRow}>
+              <Text style={[styles.roleLabel, { textAlign: isRTL ? 'right' : 'left' }]}>{t('i_am')}</Text>
+              <View style={[styles.roleRow, isRTL && { flexDirection: 'row-reverse' }]}>
                 {(['student', 'driver'] as UserRole[]).map((role) => (
                   <TouchableOpacity
                     key={role}
@@ -164,7 +192,6 @@ export default function LoginScreen() {
                       name={role === 'student' ? 'school-outline' : 'car-outline'}
                       size={16}
                       color={selectedRole === role ? Colors.white : Colors.primary}
-                      style={{ marginLeft: Spacing.xs }}
                     />
                     <Text
                       style={[
@@ -172,7 +199,7 @@ export default function LoginScreen() {
                         selectedRole === role && styles.roleChipTextActive,
                       ]}
                     >
-                      {role === 'student' ? 'طالب' : 'سائق'}
+                      {t(role)}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -189,13 +216,13 @@ export default function LoginScreen() {
             {loading ? (
               <ActivityIndicator color={Colors.white} />
             ) : (
-              <Text style={styles.buttonText}>{isSignup ? 'إنشاء الحساب' : 'تسجيل الدخول'}</Text>
+              <Text style={styles.buttonText}>{isSignup ? t('signup') : t('login')}</Text>
             )}
           </TouchableOpacity>
 
           {!isSignup && (
             <TouchableOpacity style={styles.forgotButton}>
-              <Text style={styles.forgotText}>نسيت كلمة المرور؟</Text>
+              <Text style={styles.forgotText}>{t('forgot_password')}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -203,8 +230,8 @@ export default function LoginScreen() {
         {/* Switch Mode */}
         <TouchableOpacity onPress={() => setIsSignup(!isSignup)} style={styles.switchButton}>
           <Text style={styles.switchText}>
-            {isSignup ? 'لديك حساب بالفعل؟ ' : 'لا تملك حساباً؟ '}
-            <Text style={styles.switchLink}>{isSignup ? 'تسجيل الدخول' : 'إنشاء حساب جديد'}</Text>
+            {isSignup ? t('already_have_account') : t('dont_have_account')}
+            <Text style={styles.switchLink}>{isSignup ? t('login') : t('signup')}</Text>
           </Text>
         </TouchableOpacity>
       </ScrollView>
@@ -258,7 +285,7 @@ const styles = StyleSheet.create({
   },
   // Card
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.white,
     borderRadius: BorderRadius.xl,
     padding: Spacing.xl,
     ...Shadow.lg,
@@ -274,15 +301,17 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surfaceMuted,
+    backgroundColor: Colors.surface,
     borderRadius: BorderRadius.md,
-    marginBottom: Spacing.md,
     paddingHorizontal: Spacing.md,
     borderWidth: 1,
     borderColor: Colors.border,
   },
+  inputError: {
+    borderColor: Colors.error,
+  },
   inputIcon: {
-    marginLeft: Spacing.xs,
+    marginRight: Spacing.xs,
   },
   input: {
     flex: 1,
@@ -291,7 +320,6 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
     fontSize: 15,
     color: Colors.text,
-    textAlign: 'right',
   },
   inputRTL: {
     textAlign: 'right',
@@ -302,6 +330,13 @@ const styles = StyleSheet.create({
   eyeButton: {
     padding: Spacing.xs,
   },
+  errorText: {
+    fontFamily: FontFamily.regular,
+    fontSize: 12,
+    color: Colors.error,
+    marginTop: 4,
+    marginHorizontal: Spacing.xs,
+  },
   // Role
   roleSection: {
     marginBottom: Spacing.lg,
@@ -311,12 +346,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textSecondary,
     marginBottom: Spacing.sm,
-    textAlign: 'right',
   },
   roleRow: {
     flexDirection: 'row',
     gap: Spacing.sm,
-    justifyContent: 'flex-end',
   },
   roleChip: {
     flexDirection: 'row',

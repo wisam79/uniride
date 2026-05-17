@@ -190,6 +190,18 @@ export const ProfileSchema = z.object({
 });
 export type Profile = z.infer<typeof ProfileSchema>;
 
+export const LoginSchema = z.object({
+  email: z.string().email('invalid_email'),
+  password: z.string().min(6, 'password_min_length'),
+});
+export type LoginRequest = z.infer<typeof LoginSchema>;
+
+export const SignupSchema = LoginSchema.extend({
+  fullName: z.string().min(3, 'full_name_min_length'),
+  role: UserRole,
+});
+export type SignupRequest = z.infer<typeof SignupSchema>;
+
 export const Languages = z.enum(['ar', 'en']);
 export type Language = z.infer<typeof Languages>;
 
@@ -308,7 +320,8 @@ export const Translations: Record<Language, Record<string, string>> = {
     invalid_license: 'كود التفعيل غير صالح',
     activation_success: 'تم تفعيل الاشتراك بنجاح!',
     license_code: 'كود الترخيص',
-    enter_license_code: 'أدخل كود الترخيص المكون من 12 رمزاً',
+    enter_license_code: 'أدخل كود الترخيص المكون من 8 رموز',
+    license_code_subtitle: 'الرجاء إدخال الكود المكون من 8 أحرف وأرقام الذي حصلت عليه لتفعيل اشتراكك',
     confirm_payout: 'تأكيد عملية الدفع',
     payout_submitted: 'تم إرسال طلب الدفع',
     status: 'الحالة',
@@ -376,6 +389,12 @@ export const Translations: Record<Language, Record<string, string>> = {
     start_chat_from_trip: 'ابدأ محادثة من رحلتك النشطة',
     chat_tap_to_open: 'انقر لفتح المحادثة',
     type_message: 'اكتب رسالة...',
+    personal_info: 'المعلومات الشخصية',
+    save_changes: 'حفظ التغييرات',
+    logout_question: 'هل تريد تسجيل الخروج؟',
+    invalid_email: 'البريد الإلكتروني غير صالح',
+    password_min_length: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل',
+    full_name_min_length: 'الاسم يجب أن يكون 3 أحرف على الأقل',
   },
   en: {
     welcome: 'Welcome to UniRide',
@@ -560,6 +579,12 @@ export const Translations: Record<Language, Record<string, string>> = {
     start_chat_from_trip: 'Start a chat from your active trip',
     chat_tap_to_open: 'Tap to open chat',
     type_message: 'Type a message...',
+    personal_info: 'Personal Information',
+    save_changes: 'Save Changes',
+    logout_question: 'Do you want to logout?',
+    invalid_email: 'Invalid email address',
+    password_min_length: 'Password must be at least 6 characters',
+    full_name_min_length: 'Name must be at least 3 characters',
   },
 };
 

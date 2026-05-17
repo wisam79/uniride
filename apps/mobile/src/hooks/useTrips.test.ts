@@ -2,6 +2,28 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ─── Mocks ─────────────────────────────────────────────────────────────────────
 
+(global as any).__DEV__ = true;
+process.env.EXPO_OS = 'ios';
+
+vi.mock('react-native', () => ({
+  Platform: {
+    OS: 'ios',
+    select: vi.fn((opts: any) => opts.ios || opts.default),
+  },
+  TurboModuleRegistry: {
+    get: vi.fn(),
+    getEnforcing: vi.fn(),
+  },
+  NativeModules: {},
+  NativeEventEmitter: class {},
+}));
+
+vi.mock('expo-modules-core', () => ({
+  requireNativeModule: vi.fn(),
+  EventEmitter: class {},
+  Platform: { OS: 'ios' },
+}));
+
 const mockRpc = vi.fn();
 const mockFrom = vi.fn();
 const mockChannel = vi.fn();
@@ -16,6 +38,17 @@ vi.mock('../lib/supabase', () => ({
     channel: mockChannel,
     removeChannel: mockRemoveChannel,
   },
+}));
+
+vi.mock('expo-secure-store', () => ({
+  getItemAsync: vi.fn(),
+  setItemAsync: vi.fn(),
+  deleteItemAsync: vi.fn(),
+  WHEN_UNLOCKED: 'WHEN_UNLOCKED',
+  AFTER_FIRST_UNLOCK: 'AFTER_FIRST_UNLOCK',
+  ALWAYS: 'ALWAYS',
+  WHEN_PASSCODE_SET_THIS_DEVICE_ONLY: 'WHEN_PASSCODE_SET_THIS_DEVICE_ONLY',
+  WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'WHEN_UNLOCKED_THIS_DEVICE_ONLY',
 }));
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
