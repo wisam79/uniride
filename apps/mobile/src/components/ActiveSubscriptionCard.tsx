@@ -5,13 +5,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from '../hooks/useTranslation';
 import { useRouter } from 'expo-router';
 
+import { Subscription } from '@uniride/core';
+
 interface ActiveSubscriptionCardProps {
-  activeSub: {
+  activeSub: Partial<Subscription> & {
     routes?: {
       title?: string;
     } | null;
-    end_date: string;
-    route_id?: string;
   };
   onTrackTrip: () => void;
 }
@@ -19,6 +19,8 @@ interface ActiveSubscriptionCardProps {
 export const ActiveSubscriptionCard: React.FC<ActiveSubscriptionCardProps> = ({ activeSub, onTrackTrip }) => {
   const { t, isRTL, language } = useTranslation();
   const router = useRouter();
+
+  if (!activeSub.end_date) return null;
 
   return (
     <TouchableOpacity

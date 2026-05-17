@@ -25,7 +25,7 @@ export default function ProfileScreen() {
 
   const initials = (profile?.full_name || user?.email || 'U')[0].toUpperCase();
 
-  const roleLabel = role === 'driver' ? 'سائق' : role === 'admin' ? 'مدير' : 'طالب';
+  const roleLabel = t(role || 'student');
   const roleIcon =
     role === 'driver' ? 'car-outline' : role === 'admin' ? 'shield-outline' : 'school-outline';
 
@@ -40,20 +40,20 @@ export default function ProfileScreen() {
 
       if (error) throw error;
       setProfile({ full_name: fullName.trim(), phone: phone.trim() });
-      Alert.alert('✓', 'تم حفظ التغييرات');
+      Alert.alert('✓', t('updated_successfully'));
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'حدث خطأ';
-      Alert.alert('خطأ', msg);
+      const msg = err instanceof Error ? err.message : t('error_generic');
+      Alert.alert(t('error'), msg);
     } finally {
       setSaving(false);
     }
   };
 
   const handleLogout = async () => {
-    Alert.alert('تسجيل الخروج', 'هل تريد تسجيل الخروج؟', [
-      { text: 'إلغاء', style: 'cancel' },
+    Alert.alert(t('logout'), t('logout_question'), [
+      { text: t('cancel'), style: 'cancel' },
       {
-        text: 'خروج',
+        text: t('logout'),
         style: 'destructive',
         onPress: async () => {
           await supabase.auth.signOut();
@@ -77,7 +77,7 @@ export default function ProfileScreen() {
         <View style={styles.avatarCircle}>
           <Text style={styles.avatarText}>{initials}</Text>
         </View>
-        <Text style={styles.headerName}>{profile?.full_name || 'المستخدم'}</Text>
+        <Text style={styles.headerName}>{profile?.full_name || t('user')}</Text>
         <View style={styles.roleBadge}>
           <Ionicons name={roleIcon as any} size={13} color={Colors.primary} />
           <Text style={styles.roleBadgeText}>{roleLabel}</Text>
@@ -87,11 +87,15 @@ export default function ProfileScreen() {
 
       {/* Info Form */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>المعلومات الشخصية</Text>
+        <Text style={[styles.sectionTitle, { textAlign: isRTL ? 'right' : 'left' }]}>
+          {t('personal_info')}
+        </Text>
 
         <View style={styles.field}>
-          <Text style={styles.fieldLabel}>الاسم الكامل</Text>
-          <View style={styles.inputWrapper}>
+          <Text style={[styles.fieldLabel, { textAlign: isRTL ? 'right' : 'left' }]}>
+            {t('full_name')}
+          </Text>
+          <View style={[styles.inputWrapper, isRTL && { flexDirection: 'row-reverse' }]}>
             <Ionicons
               name="person-outline"
               size={16}
@@ -99,10 +103,10 @@ export default function ProfileScreen() {
               style={styles.inputIcon}
             />
             <TextInput
-              style={styles.input}
+              style={[styles.input, isRTL && styles.inputRTL]}
               value={fullName}
               onChangeText={setFullName}
-              placeholder="أدخل اسمك الكامل"
+              placeholder={t('enter_full_name')}
               placeholderTextColor={Colors.textMuted}
               autoCapitalize="words"
             />
@@ -110,8 +114,10 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.fieldLabel}>رقم الهاتف</Text>
-          <View style={styles.inputWrapper}>
+          <Text style={[styles.fieldLabel, { textAlign: isRTL ? 'right' : 'left' }]}>
+            {t('phone')}
+          </Text>
+          <View style={[styles.inputWrapper, isRTL && { flexDirection: 'row-reverse' }]}>
             <Ionicons
               name="call-outline"
               size={16}
@@ -119,7 +125,7 @@ export default function ProfileScreen() {
               style={styles.inputIcon}
             />
             <TextInput
-              style={styles.input}
+              style={[styles.input, isRTL && styles.inputRTL]}
               value={phone}
               onChangeText={setPhone}
               placeholder="+964 7XX XXX XXXX"
@@ -130,8 +136,16 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.field}>
-          <Text style={styles.fieldLabel}>البريد الإلكتروني</Text>
-          <View style={[styles.inputWrapper, styles.inputDisabled]}>
+          <Text style={[styles.fieldLabel, { textAlign: isRTL ? 'right' : 'left' }]}>
+            {t('email')}
+          </Text>
+          <View
+            style={[
+              styles.inputWrapper,
+              styles.inputDisabled,
+              isRTL && { flexDirection: 'row-reverse' },
+            ]}
+          >
             <Ionicons
               name="mail-outline"
               size={16}
@@ -139,7 +153,7 @@ export default function ProfileScreen() {
               style={styles.inputIcon}
             />
             <TextInput
-              style={[styles.input, { color: Colors.textMuted }]}
+              style={[styles.input, isRTL && styles.inputRTL, { color: Colors.textMuted }]}
               value={user?.email || ''}
               editable={false}
             />
@@ -148,7 +162,7 @@ export default function ProfileScreen() {
         </View>
 
         <TouchableOpacity
-          style={[styles.saveButton, saving && { opacity: 0.7 }]}
+          style={[styles.saveButton, saving && { opacity: 0.7 }, isRTL && { flexDirection: 'row-reverse' }]}
           onPress={handleSave}
           disabled={saving}
           activeOpacity={0.85}
@@ -158,7 +172,7 @@ export default function ProfileScreen() {
           ) : (
             <>
               <Ionicons name="checkmark-outline" size={18} color={Colors.white} />
-              <Text style={styles.saveButtonText}>حفظ التغييرات</Text>
+              <Text style={styles.saveButtonText}>{t('save_changes')}</Text>
             </>
           )}
         </TouchableOpacity>
@@ -166,11 +180,13 @@ export default function ProfileScreen() {
 
       {/* Language */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>اللغة</Text>
-        <View style={styles.langRow}>
+        <Text style={[styles.sectionTitle, { textAlign: isRTL ? 'right' : 'left' }]}>
+          {t('language')}
+        </Text>
+        <View style={[styles.langRow, isRTL && { flexDirection: 'row-reverse' }]}>
           {[
-            { code: 'ar', label: 'العربية' },
-            { code: 'en', label: 'English' },
+            { code: 'ar', label: t('arabic') },
+            { code: 'en', label: t('english') },
           ].map((lang) => (
             <TouchableOpacity
               key={lang.code}
@@ -188,9 +204,13 @@ export default function ProfileScreen() {
       </View>
 
       {/* Logout */}
-      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.85}>
+      <TouchableOpacity
+        style={[styles.logoutButton, isRTL && { flexDirection: 'row-reverse' }]}
+        onPress={handleLogout}
+        activeOpacity={0.85}
+      >
         <Ionicons name="log-out-outline" size={18} color={Colors.error} />
-        <Text style={styles.logoutText}>تسجيل الخروج</Text>
+        <Text style={styles.logoutText}>{t('logout')}</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -266,7 +286,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.text,
     marginBottom: Spacing.lg,
-    textAlign: 'right',
   },
   // Field
   field: {
@@ -277,7 +296,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textSecondary,
     marginBottom: Spacing.xs,
-    textAlign: 'right',
   },
   inputWrapper: {
     flexDirection: 'row',
@@ -292,7 +310,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   inputIcon: {
-    marginLeft: Spacing.xs,
+    marginHorizontal: Spacing.xs,
   },
   input: {
     flex: 1,
@@ -301,6 +319,8 @@ const styles = StyleSheet.create({
     fontFamily: FontFamily.regular,
     fontSize: 14,
     color: Colors.text,
+  },
+  inputRTL: {
     textAlign: 'right',
   },
   // Save
